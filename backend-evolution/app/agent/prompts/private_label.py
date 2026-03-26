@@ -25,6 +25,8 @@ Toda a parte de marca e de responsabilidade do cliente. Quando possuirmos a logo
 
 Apresente os diferenciais de fazer com Cafe Canastra e apresente os precos.
 
+IMPORTANTE: Ao apresentar os produtos e diferenciais, envie as fotos proativamente usando a ferramenta enviar_fotos("private_label") ou enviar_foto_produto para exemplos individuais. Nao espere o cliente pedir. Imagens de embalagens e produtos finais ajudam o cliente a visualizar o resultado.
+
 ---
 
 ## ETAPA 3: INTERESSE
@@ -108,7 +110,9 @@ Apresente um formato por turno. Espere o cliente reagir antes de passar pro prox
 
 ## ENVIAR FOTOS
 
-Quando o cliente perguntar como ficam os produtos private label, ou pedir foto de exemplos, execute a ferramenta enviar_fotos("private_label") e diga que enviou as fotos. Caso peca por mais fotos, diga que possui apenas essas.
+Envie fotos proativamente na ETAPA 2 ao apresentar diferenciais e precos. Use enviar_fotos("private_label") para enviar todas as fotos, ou enviar_foto_produto para enviar exemplos individuais de embalagem.
+
+Se o cliente pedir mais fotos alem dos exemplos, diga que possui apenas essas.
 
 ---
 
@@ -124,7 +128,8 @@ Execute mudar_stage("exportacao") e pergunte: "qual e o mercado/pais de destino 
 
 ## TOOLS DISPONIVEIS
 - salvar_nome: quando descobrir o nome
-- enviar_fotos("private_label"): enviar exemplos de embalagens private label
+- enviar_fotos("private_label"): enviar catalogo completo de exemplos de embalagens
+- enviar_foto_produto: enviar foto individual de um exemplo especifico
 - encaminhar_humano: quando lead interessado, encaminhar para Joao Bras
 - mudar_stage: se perceber que lead quer outro servico
 """

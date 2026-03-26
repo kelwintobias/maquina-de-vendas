@@ -166,7 +166,7 @@ async def execute_tool(
 
     elif tool_name == "encaminhar_humano":
         # TODO: implement actual human handoff (e.g., notify via WhatsApp group or webhook)
-        update_lead(lead_id, status="converted")
+        update_lead(lead_id, status="converted", human_control=True, seller_stage="novo")
         save_message(lead_id, "system", f"Lead encaminhado para {args['vendedor']}: {args['motivo']}")
         return f"Lead encaminhado para {args['vendedor']}"
 

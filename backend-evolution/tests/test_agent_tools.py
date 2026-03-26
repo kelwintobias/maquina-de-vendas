@@ -1,4 +1,4 @@
-from app.agent.tools import get_tools_for_stage, PHOTO_CAPTIONS
+from app.agent.tools import get_tools_for_stage, PHOTO_CAPTIONS, PRODUTO_PHOTO_MAP
 
 
 def test_secretaria_tools():
@@ -36,3 +36,29 @@ def test_photo_captions_exist_for_private_label():
     captions = PHOTO_CAPTIONS["private_label"]
     assert len(captions) == 4
     assert "foto_1" in captions
+
+
+def test_produto_photo_map_has_classico():
+    assert "atacado" in PRODUTO_PHOTO_MAP
+    assert "classico" in PRODUTO_PHOTO_MAP["atacado"]
+    entry = PRODUTO_PHOTO_MAP["atacado"]["classico"]
+    assert "file" in entry
+    assert "caption" in entry
+
+
+def test_atacado_tools_include_enviar_foto_produto():
+    tools = get_tools_for_stage("atacado")
+    names = [t["function"]["name"] for t in tools]
+    assert "enviar_foto_produto" in names
+
+
+def test_private_label_tools_include_enviar_foto_produto():
+    tools = get_tools_for_stage("private_label")
+    names = [t["function"]["name"] for t in tools]
+    assert "enviar_foto_produto" in names
+
+
+def test_secretaria_tools_exclude_enviar_foto_produto():
+    tools = get_tools_for_stage("secretaria")
+    names = [t["function"]["name"] for t in tools]
+    assert "enviar_foto_produto" not in names

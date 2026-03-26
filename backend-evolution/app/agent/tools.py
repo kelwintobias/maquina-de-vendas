@@ -25,6 +25,23 @@ PHOTO_CAPTIONS: dict[str, dict[str, str]] = {
     },
 }
 
+PRODUTO_PHOTO_MAP: dict[str, dict[str, dict[str, str]]] = {
+    "atacado": {
+        "classico": {"file": "foto_1.jpg", "caption": "Classico — torra media-escura, notas achocolatadas"},
+        "suave": {"file": "foto_2.jpg", "caption": "Suave — torra media, notas de melaco e frutas amarelas"},
+        "canela": {"file": "foto_3.png", "caption": "Canela — caramelizado com toque de canela"},
+        "microlote": {"file": "foto_4.jpg", "caption": "Microlote — notas de mel, caramelo e cacau"},
+        "drip": {"file": "foto_5.jpg", "caption": "Drip Coffee e Capsulas Nespresso"},
+        "capsulas": {"file": "foto_5.jpg", "caption": "Drip Coffee e Capsulas Nespresso"},
+    },
+    "private_label": {
+        "embalagem": {"file": "foto_1.jpg", "caption": "Embalagem personalizada com sua marca"},
+        "standup": {"file": "foto_2.jpg", "caption": "Modelo de embalagem standup"},
+        "silk": {"file": "foto_3.jpg", "caption": "Exemplo de silk com logo do cliente"},
+        "final": {"file": "foto_4.jpg", "caption": "Produto final pronto para comercializacao"},
+    },
+}
+
 TOOLS_SCHEMA = [
     {
         "type": "function",
@@ -91,6 +108,28 @@ TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "enviar_foto_produto",
+            "description": "Envia a foto de UM produto especifico ao lead com descricao. Use para intercalar texto e foto na conversa.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "categoria": {
+                        "type": "string",
+                        "enum": ["atacado", "private_label"],
+                        "description": "Categoria do produto",
+                    },
+                    "produto": {
+                        "type": "string",
+                        "description": "Nome do produto (ex: classico, suave, canela, microlote, drip, capsulas, embalagem, standup, silk, final)",
+                    },
+                },
+                "required": ["categoria", "produto"],
+            },
+        },
+    },
 ]
 
 
@@ -98,8 +137,8 @@ def get_tools_for_stage(stage: str) -> list[dict]:
     """Return tools available for a given stage."""
     stage_tools = {
         "secretaria": ["salvar_nome", "mudar_stage"],
-        "atacado": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos"],
-        "private_label": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos"],
+        "atacado": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos", "enviar_foto_produto"],
+        "private_label": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos", "enviar_foto_produto"],
         "exportacao": ["salvar_nome", "mudar_stage", "encaminhar_humano"],
         "consumo": ["salvar_nome"],
     }
@@ -157,5 +196,30 @@ async def execute_tool(
 
         save_message(lead_id, "system", f"Fotos de {categoria} enviadas ({sent}/{len(photos)})")
         return f"{sent} fotos de {categoria} enviadas ao lead"
+
+    elif tool_name == "enviar_foto_produto":
+        categoria = args["categoria"]
+        produto = args["produto"].lower().strip()
+        cat_map = PRODUTO_PHOTO_MAP.get(categoria, {})
+        entry = cat_map.get(produto)
+        if not entry:
+            return f"produto '{produto}' nao encontrado na categoria {categoria}"
+
+        photos_dir = Path(__file__).parent.parent / "photos" / categoria
+        stem = Path(entry["file"]).stem  # e.g. "foto_1"
+        matches = list(photos_dir.glob(f"{stem}.*"))
+        if not matches:
+            return f"foto do produto '{produto}' nao encontrada"
+        photo_path = matches[0]
+
+        b64 = base64.b64encode(photo_path.read_bytes()).decode()
+        mimetype = "image/png" if photo_path.suffix == ".png" else "image/jpeg"
+        try:
+            await send_image_base64(phone, b64, mimetype, caption=entry["caption"])
+            save_message(lead_id, "system", f"Foto de {produto} enviada")
+            return f"foto de {produto} enviada ao lead"
+        except Exception as e:
+            logger.warning(f"Failed to send product photo {produto}: {e}")
+            return f"erro ao enviar foto de {produto}"
 
     return f"Tool {tool_name} nao reconhecida"

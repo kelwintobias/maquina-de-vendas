@@ -70,7 +70,7 @@ class TestPauseCadence:
 
 
 class TestResumeCadence:
-    def test_sets_active_status_and_next_send(self, mock_sb):
+    def test_sets_active_status_resets_step_and_next_send(self, mock_sb):
         mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [
             {"id": "state-1", "status": "active"}
         ]
@@ -78,6 +78,7 @@ class TestResumeCadence:
         result = resume_cadence("state-1", next_send_at=next_send)
         update_call = mock_sb.table.return_value.update.call_args[0][0]
         assert update_call["status"] == "active"
+        assert update_call["current_step"] == 0
         assert update_call["cooldown_until"] is None
 
 
@@ -120,7 +121,7 @@ class TestGetDueCadences:
 class TestGetReengagementCadences:
     def test_returns_responded_cadences_past_cooldown(self, mock_sb):
         now = datetime(2026, 3, 30, 10, 0, tzinfo=timezone.utc)
-        mock_sb.table.return_value.select.return_value.eq.return_value.lte.return_value.execute.return_value.data = [
+        mock_sb.table.return_value.select.return_value.eq.return_value.lte.return_value.limit.return_value.execute.return_value.data = [
             {"id": "state-1", "lead_id": "lead-1", "status": "responded"}
         ]
         result = get_reengagement_cadences(now)

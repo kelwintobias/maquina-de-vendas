@@ -11,6 +11,8 @@ class CampaignCreate(BaseModel):
     name: str
     template_name: str
     template_params: dict | None = None
+    type: str = "bot"
+    instance_name: str | None = None
     send_interval_min: int = 3
     send_interval_max: int = 8
     cadence_interval_hours: int = 24
@@ -18,6 +20,10 @@ class CampaignCreate(BaseModel):
     cadence_send_end_hour: int = 18
     cadence_cooldown_hours: int = 48
     cadence_max_messages: int = 8
+
+
+class AssignLeadsRequest(BaseModel):
+    lead_ids: list[str]
 
 
 @router.get("")
@@ -110,3 +116,47 @@ async def pause_campaign(campaign_id: str):
     sb = get_supabase()
     sb.table("campaigns").update({"status": "paused"}).eq("id", campaign_id).execute()
     return {"status": "paused"}
+
+
+@router.post("/{campaign_id}/assign-leads")
+async def assign_leads(campaign_id: str, req: AssignLeadsRequest):
+    sb = get_supabase()
+
+    # Verify campaign exists
+    campaign = sb.table("campaigns").select("id").eq("id", campaign_id).single().execute().data
+    if not campaign:
+        raise HTTPException(404, "Campanha nao encontrada")
+
+    assigned = 0
+    skipped = 0
+
+    for lead_id in req.lead_ids:
+        lead = sb.table("leads").select("id, campaign_id").eq("id", lead_id).single().execute().data
+        if not lead:
+            skipped += 1
+            continue
+
+        if lead.get("campaign_id"):
+            existing = (
+                sb.table("campaigns")
+                .select("status")
+                .eq("id", lead["campaign_id"])
+                .single()
+                .execute()
+                .data
+            )
+            if existing and existing["status"] == "running":
+                skipped += 1
+                continue
+
+        sb.table("leads").update({
+            "campaign_id": campaign_id,
+            "status": "imported",
+        }).eq("id", lead_id).execute()
+        assigned += 1
+
+    # Update total_leads
+    total = sb.table("leads").select("id", count="exact").eq("campaign_id", campaign_id).execute().count
+    sb.table("campaigns").update({"total_leads": total or 0}).eq("id", campaign_id).execute()
+
+    return {"assigned": assigned, "skipped": skipped}

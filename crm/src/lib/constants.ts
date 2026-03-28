@@ -1,17 +1,17 @@
 export const AGENT_STAGES = [
-  { key: "secretaria", label: "Secretaria", color: "bg-[#f4f4f0]" },
-  { key: "atacado", label: "Atacado", color: "bg-[#dce8f0]" },
-  { key: "private_label", label: "Private Label", color: "bg-[#e8dff0]" },
-  { key: "exportacao", label: "Exportacao", color: "bg-[#d8f0dc]" },
-  { key: "consumo", label: "Consumo", color: "bg-[#f0ecd0]" },
+  { key: "secretaria", label: "Secretaria", color: "bg-[#f4f4f0]", dotColor: "#c8cc8e", tintColor: "#f2f3eb", avatarColor: "#c8cc8e" },
+  { key: "atacado", label: "Atacado", color: "bg-[#dce8f0]", dotColor: "#5b8aad", tintColor: "#eef2f6", avatarColor: "#5aad65" },
+  { key: "private_label", label: "Private Label", color: "bg-[#e8dff0]", dotColor: "#9b7abf", tintColor: "#f0edf4", avatarColor: "#9b7abf" },
+  { key: "exportacao", label: "Exportacao", color: "bg-[#d8f0dc]", dotColor: "#5aad65", tintColor: "#edf4ef", avatarColor: "#e8d44d" },
+  { key: "consumo", label: "Consumo", color: "bg-[#f0ecd0]", dotColor: "#d4b84a", tintColor: "#f4f2ea", avatarColor: "#d4b84a" },
 ] as const;
 
 export const SELLER_STAGES = [
-  { key: "novo", label: "Novo", color: "bg-[#f0d8d8]" },
-  { key: "em_contato", label: "Em Contato", color: "bg-[#f0e4d0]" },
-  { key: "negociacao", label: "Negociacao", color: "bg-[#dce8f0]" },
-  { key: "fechado", label: "Fechado", color: "bg-[#d8f0dc]" },
-  { key: "perdido", label: "Perdido", color: "bg-[#f4f4f0]" },
+  { key: "novo", label: "Novo", color: "bg-[#f0d8d8]", dotColor: "#e07a7a", tintColor: "#f6eeee", avatarColor: "#e07a7a" },
+  { key: "em_contato", label: "Em Contato", color: "bg-[#f0e4d0]", dotColor: "#d4a04a", tintColor: "#f4f0ea", avatarColor: "#d4a04a" },
+  { key: "negociacao", label: "Negociacao", color: "bg-[#dce8f0]", dotColor: "#5b8aad", tintColor: "#eef2f6", avatarColor: "#5b8aad" },
+  { key: "fechado", label: "Fechado", color: "bg-[#d8f0dc]", dotColor: "#5aad65", tintColor: "#edf4ef", avatarColor: "#5aad65" },
+  { key: "perdido", label: "Perdido", color: "bg-[#f4f4f0]", dotColor: "#9ca3af", tintColor: "#f2f2f0", avatarColor: "#9ca3af" },
 ] as const;
 
 export const CONVERSATION_TABS = [

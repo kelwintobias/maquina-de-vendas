@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={`${dmSans.variable} ${dmSans.className}`}>{children}</body>
+      <body suppressHydrationWarning className={`${dmSans.variable} ${dmSans.className}`}>{children}</body>
     </html>
   );
 }

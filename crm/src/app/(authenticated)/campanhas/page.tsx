@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRealtimeCampaigns } from "@/hooks/use-realtime-campaigns";
-import { CAMPAIGN_STATUS_COLORS } from "@/lib/constants";
+import { CampaignCard } from "@/components/campaign-card";
 
 const FASTAPI_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
@@ -49,12 +49,6 @@ export default function CampanhasPage() {
       setTemplateName("");
     }
     setCreating(false);
-  }
-
-  async function handleAction(campaignId: string, action: "start" | "pause") {
-    await fetch(`${FASTAPI_URL}/api/campaigns/${campaignId}/${action}`, {
-      method: "POST",
-    });
   }
 
   if (loading) {
@@ -171,77 +165,15 @@ export default function CampanhasPage() {
         </form>
       )}
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left border-b border-[#e5e5dc]">
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Nome</th>
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Status</th>
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Progresso</th>
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Respondidos</th>
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Taxa</th>
-              <th className="px-5 py-3.5 text-[11px] font-medium uppercase tracking-wider text-[#9ca3af]">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((c) => {
-              const progress =
-                c.total_leads > 0
-                  ? Math.round((c.sent / c.total_leads) * 100)
-                  : 0;
-              const rate =
-                c.sent > 0
-                  ? `${Math.round((c.replied / c.sent) * 100)}%`
-                  : "\u2014";
-              return (
-                <tr key={c.id} className="border-b border-[#e5e5dc] last:border-0 hover:bg-[#f6f7ed]/50 transition-colors">
-                  <td className="px-5 py-4 text-[#1f1f1f] font-medium">{c.name}</td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium ${
-                        CAMPAIGN_STATUS_COLORS[c.status] || ""
-                      }`}
-                    >
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-24 bg-[#e5e5dc] rounded-full h-2">
-                        <div
-                          className="bg-[#1f1f1f] rounded-full h-2 transition-all"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <span className="text-[11px] text-[#9ca3af]">
-                        {c.sent}/{c.total_leads}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-[#5f6368]">{c.replied}</td>
-                  <td className="px-5 py-4 text-[#5f6368]">{rate}</td>
-                  <td className="px-5 py-4">
-                    {c.status === "draft" || c.status === "paused" ? (
-                      <button
-                        onClick={() => handleAction(c.id, "start")}
-                        className="text-[12px] font-medium text-[#1f1f1f] bg-[#f6f7ed] hover:bg-[#e5e5dc] px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Iniciar
-                      </button>
-                    ) : c.status === "running" ? (
-                      <button
-                        onClick={() => handleAction(c.id, "pause")}
-                        className="text-[12px] font-medium text-[#5f6368] bg-[#f6f7ed] hover:bg-[#e5e5dc] px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Pausar
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="flex flex-col gap-4">
+        {campaigns.map((c) => (
+          <CampaignCard key={c.id} campaign={c} />
+        ))}
+        {campaigns.length === 0 && (
+          <div className="card p-12 text-center">
+            <p className="text-[14px] text-[#5f6368]">Nenhuma campanha criada ainda.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -45,9 +45,9 @@ export function QuickAddLead({ stage, sellerStage = "novo", humanControl = false
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full text-center py-2 text-[12px] text-[#9ca3af] hover:text-[#5f6368] hover:bg-[#f6f7ed] rounded-lg transition-colors"
+        className="w-full text-center py-2 text-[12px] text-[#9ca3af] hover:text-[#5f6368] border border-dashed border-[#d4d4c8] hover:border-[#c8cc8e] rounded-[10px] transition-colors mt-2"
       >
-        + Adicao rapida
+        + Adicionar lead
       </button>
     );
   }

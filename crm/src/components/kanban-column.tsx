@@ -1,15 +1,14 @@
-import type { Lead } from "@/lib/types";
+import type { Lead, Tag } from "@/lib/types";
 import { LeadCard } from "./lead-card";
-import type { Tag } from "@/lib/types";
 
 interface KanbanColumnProps {
   title: string;
   leads: Lead[];
-  colorClass: string;
+  dotColor: string;
+  tintColor: string;
+  avatarColor: string;
   onLeadClick: (lead: Lead) => void;
   showAgentStage?: boolean;
-  id?: string;
-  tags?: Tag[];
   leadTagsMap?: Record<string, Tag[]>;
   lastMessagesMap?: Record<string, string>;
   children?: React.ReactNode;
@@ -19,42 +18,43 @@ interface KanbanColumnProps {
 export function KanbanColumn({
   title,
   leads,
-  colorClass,
+  dotColor,
+  tintColor,
+  avatarColor,
   onLeadClick,
   showAgentStage,
-  tags,
   leadTagsMap,
   lastMessagesMap,
   children,
   footer,
 }: KanbanColumnProps) {
-  const totalValue = leads.reduce((sum, l) => sum + (l.sale_value || 0), 0);
-  const valueStr = totalValue > 0
-    ? `R$ ${totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}`
-    : null;
-
   return (
-    <div className="flex-shrink-0 w-[280px]">
-      <div className="px-3 py-3 mb-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
-            <h3 className="text-[14px] font-semibold text-[#1f1f1f]">
-              {title}
-            </h3>
-          </div>
-          <span className="text-[12px] font-medium text-[#5f6368] border border-[#e5e5dc] rounded-full px-2.5 py-0.5">
-            {leads.length}
-          </span>
+    <div className="flex-shrink-0 w-[270px]">
+      {/* Dark header */}
+      <div className="bg-[#1f1f1f] rounded-t-xl px-3.5 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: dotColor }}
+          />
+          <h3 className="text-[12px] font-semibold text-white">{title}</h3>
         </div>
-        {valueStr && (
-          <p className="text-[11px] text-[#2d6a3f] font-medium mt-1 pl-4">
-            {valueStr}
-          </p>
-        )}
+        <span className="text-[10px] font-semibold text-white bg-white/15 rounded-full px-2 py-0.5">
+          {leads.length}
+        </span>
       </div>
-      <div className="rounded-xl p-2 min-h-[calc(100vh-260px)] space-y-2.5 overflow-y-auto">
+
+      {/* Tinted body */}
+      <div
+        className="rounded-b-xl p-2.5 min-h-[calc(100vh-280px)] space-y-2.5 overflow-y-auto"
+        style={{ backgroundColor: tintColor }}
+      >
         {children}
+        {!children && leads.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <p className="text-[12px] text-[#b0adb5] mb-3">Nenhum lead</p>
+          </div>
+        )}
         {!children &&
           leads.map((lead) => (
             <LeadCard
@@ -64,6 +64,7 @@ export function KanbanColumn({
               showAgentStage={showAgentStage}
               tags={leadTagsMap?.[lead.id]}
               lastMessage={lastMessagesMap?.[lead.id]}
+              avatarColor={avatarColor}
             />
           ))}
         {footer}

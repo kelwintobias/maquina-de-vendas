@@ -1,34 +1,7 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import { getServiceSupabase } from "@/lib/supabase/api";
 
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll() {},
-      },
-    }
-  );
-  const anonSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll() {},
-      },
-    }
-  );
-  const { data: { user } } = await anonSupabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { phone, text } = await req.json();
   if (!phone || !text) {
     return NextResponse.json(
@@ -37,12 +10,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const instanceName = `seller-${user.id}`;
+  const baseUrl = process.env.EVOLUTION_API_URL!.replace(/\/+$/, "");
+  const instanceName = process.env.EVOLUTION_INSTANCE!;
+  const encodedInstance = encodeURIComponent(instanceName);
 
   try {
-    // Send the message
     const res = await fetch(
-      `${process.env.EVOLUTION_API_URL}/message/sendText/${instanceName}`,
+      `${baseUrl}/message/sendText/${encodedInstance}`,
       {
         method: "POST",
         headers: {
@@ -59,6 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Auto-create lead if it doesn't exist
+    const supabase = await getServiceSupabase();
     const { data: existingLead } = await supabase
       .from("leads")
       .select("id")
@@ -81,7 +56,6 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (insertError) {
-        // Message was sent successfully, but lead creation failed — still return ok
         return NextResponse.json({ ok: true, leadError: insertError.message });
       }
 
@@ -89,7 +63,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

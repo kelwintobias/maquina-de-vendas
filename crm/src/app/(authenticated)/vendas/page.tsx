@@ -26,54 +26,61 @@ import type { Lead, Tag } from "@/lib/types";
 function DroppableColumn({
   id,
   title,
-  colorClass,
+  dotColor,
+  tintColor,
+  avatarColor,
   leads,
   onLeadClick,
   leadTagsMap,
 }: {
   id: string;
   title: string;
-  colorClass: string;
+  dotColor: string;
+  tintColor: string;
+  avatarColor: string;
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   leadTagsMap: Record<string, Tag[]>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  const totalValue = leads.reduce((sum, l) => sum + (l.sale_value || 0), 0);
-  const valueStr = totalValue > 0
-    ? `R$ ${totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}`
-    : null;
 
   return (
-    <div className="flex-shrink-0 w-[280px]">
-      <div className="px-3 py-3 mb-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
-            <h3 className="text-[14px] font-semibold text-[#1f1f1f]">{title}</h3>
-          </div>
-          <span className="text-[12px] font-medium text-[#5f6368] border border-[#e5e5dc] rounded-full px-2.5 py-0.5">
-            {leads.length}
-          </span>
+    <div className="flex-shrink-0 w-[270px]">
+      {/* Dark header */}
+      <div className="bg-[#1f1f1f] rounded-t-xl px-3.5 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: dotColor }}
+          />
+          <h3 className="text-[12px] font-semibold text-white">{title}</h3>
         </div>
-        {valueStr && (
-          <p className="text-[11px] text-[#2d6a3f] font-medium mt-1 pl-4">{valueStr}</p>
-        )}
+        <span className="text-[10px] font-semibold text-white bg-white/15 rounded-full px-2 py-0.5">
+          {leads.length}
+        </span>
       </div>
+      {/* Tinted body */}
       <div
         ref={setNodeRef}
-        className={`rounded-xl p-2 min-h-[calc(100vh-260px)] space-y-2.5 overflow-y-auto transition-all duration-200 ${
+        className={`rounded-b-xl p-2.5 min-h-[calc(100vh-280px)] space-y-2.5 overflow-y-auto transition-all duration-200 ${
           isOver
-            ? "border-2 border-dashed border-[#c8cc8e] bg-[#c8cc8e]/5"
-            : "border-2 border-transparent"
+            ? "ring-2 ring-[#c8cc8e] ring-inset"
+            : ""
         }`}
+        style={{ backgroundColor: tintColor }}
       >
+        {leads.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <p className="text-[12px] text-[#b0adb5] mb-3">Nenhum lead</p>
+          </div>
+        )}
         {leads.map((lead) => (
           <DraggableLeadCard
             key={lead.id}
             lead={lead}
             onClick={onLeadClick}
             tags={leadTagsMap[lead.id]}
+            avatarColor={avatarColor}
           />
         ))}
         <QuickAddLead stage="secretaria" sellerStage={id} humanControl />
@@ -86,10 +93,12 @@ function DraggableLeadCard({
   lead,
   onClick,
   tags,
+  avatarColor,
 }: {
   lead: Lead;
   onClick: (lead: Lead) => void;
   tags?: Tag[];
+  avatarColor?: string;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
@@ -103,7 +112,7 @@ function DraggableLeadCard({
       {...attributes}
       className={isDragging ? "opacity-30" : ""}
     >
-      <LeadCard lead={lead} onClick={onClick} showAgentStage tags={tags} />
+      <LeadCard lead={lead} onClick={onClick} showAgentStage tags={tags} avatarColor={avatarColor} />
     </div>
   );
 }
@@ -209,7 +218,7 @@ export default function VendasPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-5 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4">
           {SELLER_STAGES.map((stage) => {
             const stageLeads = filteredLeads.filter(
               (l) => l.seller_stage === stage.key
@@ -219,7 +228,9 @@ export default function VendasPage() {
                 key={stage.key}
                 id={stage.key}
                 title={stage.label}
-                colorClass={stage.color}
+                dotColor={stage.dotColor}
+                tintColor={stage.tintColor}
+                avatarColor={stage.avatarColor}
                 leads={stageLeads}
                 onLeadClick={setChatLead}
                 leadTagsMap={leadTagsMap}
@@ -229,7 +240,7 @@ export default function VendasPage() {
         </div>
         <DragOverlay>
           {activeDrag ? (
-            <div className="w-[280px] opacity-90 rotate-[2deg] shadow-xl">
+            <div className="w-[270px] opacity-90 rotate-[2deg] shadow-xl">
               <LeadCard lead={activeDrag} onClick={() => {}} showAgentStage />
             </div>
           ) : null}

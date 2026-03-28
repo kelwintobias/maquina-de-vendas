@@ -7,6 +7,8 @@ from app.humanizer.splitter import split_into_bubbles
 from app.humanizer.typing import calculate_typing_delay
 from app.whatsapp.client import send_text
 from app.whatsapp.media import transcribe_audio, describe_image
+from app.cadence.service import get_cadence_state, pause_cadence
+from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,14 @@ async def process_buffered_messages(phone: str, combined_text: str):
 
         # Get or create lead
         lead = get_or_create_lead(phone)
+
+        # Pause cadence if active
+        cadence = get_cadence_state(lead["id"])
+        if cadence:
+            pause_cadence(cadence["id"])
+            sb = get_supabase()
+            sb.rpc("increment_cadence_responded", {"campaign_id_param": cadence["campaign_id"]}).execute()
+            logger.info(f"[CADENCE] Lead {phone} responded — pausing cadence")
 
         # Activate lead if pending/template_sent
         if lead.get("status") in ("imported", "template_sent"):

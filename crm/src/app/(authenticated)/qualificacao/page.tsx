@@ -84,7 +84,7 @@ export default function QualificacaoPage() {
         onToggleActive={() => setShowActive(!showActive)}
       />
 
-      <div className="flex gap-5 overflow-x-auto pb-4">
+      <div className="flex gap-3 overflow-x-auto pb-4">
         {AGENT_STAGES.map((stage) => {
           const stageLeads = filteredLeads.filter((l) => l.stage === stage.key);
           return (
@@ -92,7 +92,9 @@ export default function QualificacaoPage() {
               key={stage.key}
               title={stage.label}
               leads={stageLeads}
-              colorClass={stage.color}
+              dotColor={stage.dotColor}
+              tintColor={stage.tintColor}
+              avatarColor={stage.avatarColor}
               onLeadClick={setSelectedLead}
               leadTagsMap={leadTagsMap}
               footer={<QuickAddLead stage={stage.key} />}

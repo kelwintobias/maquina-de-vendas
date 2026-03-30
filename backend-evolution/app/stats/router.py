@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Query
 from datetime import date, timedelta
 from app.db.supabase import get_supabase
-from app.agent.token_tracker import refresh_pricing
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -27,6 +26,7 @@ async def get_costs(
         .select("total_cost, prompt_tokens, completion_tokens, lead_id")
         .gte("created_at", start_date.isoformat())
         .lt("created_at", end_date.isoformat())
+        .limit(10000)
     )
 
     if stage:
@@ -77,6 +77,7 @@ async def get_daily_costs(
         .select("total_cost, created_at")
         .gte("created_at", start_date.isoformat())
         .lt("created_at", end_date.isoformat())
+        .limit(10000)
     )
 
     if stage:
@@ -123,6 +124,7 @@ async def get_cost_breakdown(
         .select(select_fields)
         .gte("created_at", start_date.isoformat())
         .lt("created_at", end_date.isoformat())
+        .limit(10000)
     )
 
     result = query.execute()
@@ -169,6 +171,7 @@ async def get_top_leads(
         .select("total_cost, prompt_tokens, completion_tokens, lead_id, stage")
         .gte("created_at", start_date.isoformat())
         .lt("created_at", end_date.isoformat())
+        .limit(10000)
         .execute()
     )
 

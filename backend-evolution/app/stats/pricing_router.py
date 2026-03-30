@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.db.supabase import get_supabase
@@ -26,7 +28,7 @@ async def update_pricing(model: str, body: PricingUpdate):
         .update({
             "price_per_input_token": body.price_per_input_token,
             "price_per_output_token": body.price_per_output_token,
-            "updated_at": "now()",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         })
         .eq("model", model)
         .execute()

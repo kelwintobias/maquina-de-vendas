@@ -13,6 +13,7 @@ from app.agent.prompts.exportacao import EXPORTACAO_PROMPT
 from app.agent.prompts.consumo import CONSUMO_PROMPT
 from app.agent.tools import get_tools_for_stage, execute_tool
 from app.leads.service import get_history, save_message, update_lead
+from app.agent.token_tracker import track_token_usage
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,17 @@ async def run_agent(lead: dict, user_text: str) -> str:
         max_tokens=500,
     )
 
+    # Track token usage
+    if response.usage:
+        track_token_usage(
+            lead_id=lead["id"],
+            stage=stage,
+            model=model,
+            call_type="response",
+            prompt_tokens=response.usage.prompt_tokens,
+            completion_tokens=response.usage.completion_tokens,
+        )
+
     message = response.choices[0].message
 
     # Process tool calls if any
@@ -125,6 +137,18 @@ async def run_agent(lead: dict, user_text: str) -> str:
             temperature=0.7,
             max_tokens=500,
         )
+
+        # Track token usage for tool follow-up
+        if response.usage:
+            track_token_usage(
+                lead_id=lead["id"],
+                stage=stage,
+                model=model,
+                call_type="response",
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+            )
+
         message = response.choices[0].message
 
     assistant_text = message.content or ""
@@ -184,6 +208,18 @@ async def _guardrail_secretaria(lead: dict, messages: list[dict]) -> None:
             temperature=0,
             max_tokens=20,
         )
+
+        # Track classification token usage
+        if response.usage:
+            track_token_usage(
+                lead_id=lead["id"],
+                stage="secretaria",
+                model="gpt-4.1-mini",
+                call_type="classification",
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+            )
+
         classification = (response.choices[0].message.content or "").strip().lower()
 
         valid_stages = {"atacado", "private_label", "exportacao", "consumo"}

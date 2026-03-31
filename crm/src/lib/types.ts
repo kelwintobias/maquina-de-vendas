@@ -129,3 +129,21 @@ export interface CadenceState {
   created_at: string;
   leads?: Lead;
 }
+
+export interface LeadNote {
+  id: string;
+  lead_id: string;
+  author: string;
+  content: string;
+  created_at: string;
+}
+
+export interface LeadEvent {
+  id: string;
+  lead_id: string;
+  event_type: string;
+  old_value: string | null;
+  new_value: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}

@@ -1,18 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LeadSelector } from "@/components/lead-selector";
+import type { Channel } from "@/lib/types";
 
 const FASTAPI_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
 interface CreateCampaignModalProps {
   open: boolean;
   onClose: () => void;
-}
-
-interface InstanceInfo {
-  connected: boolean;
-  number?: string;
 }
 
 export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps) {
@@ -24,8 +20,9 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
   const [templateName, setTemplateName] = useState("");
   const [intervalMin, setIntervalMin] = useState(3);
   const [intervalMax, setIntervalMax] = useState(8);
-  const [instance, setInstance] = useState<InstanceInfo | null>(null);
-  const [instanceLoading, setInstanceLoading] = useState(false);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("");
 
   // Step 2 fields
   const [leadTab, setLeadTab] = useState<"crm" | "csv">("crm");
@@ -37,22 +34,26 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch instance status when modal opens
-  useState(() => {
-    if (open) {
-      setInstanceLoading(true);
-      fetch("/api/evolution/status")
-        .then((r) => r.json())
-        .then((data) => {
-          setInstance(data);
-          setInstanceLoading(false);
-        })
-        .catch(() => {
-          setInstance({ connected: false });
-          setInstanceLoading(false);
-        });
-    }
-  });
+  // Fetch meta_cloud channels when modal opens
+  useEffect(() => {
+    if (!open) return;
+    setChannelsLoading(true);
+    fetch("/api/channels")
+      .then((r) => r.json())
+      .then((data: Channel[]) => {
+        const metaChannels = Array.isArray(data)
+          ? data.filter((c) => c.provider === "meta_cloud" && c.is_active)
+          : [];
+        setChannels(metaChannels);
+        if (metaChannels.length === 1) {
+          setSelectedChannelId(metaChannels[0].id);
+        }
+      })
+      .catch(() => {
+        setChannels([]);
+      })
+      .finally(() => setChannelsLoading(false));
+  }, [open]);
 
   function resetForm() {
     setStep(1);
@@ -61,6 +62,7 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
     setTemplateName("");
     setIntervalMin(3);
     setIntervalMax(8);
+    setSelectedChannelId("");
     setSelectedLeadIds(new Set());
     setCsvFile(null);
     setCsvPreview(null);
@@ -73,7 +75,7 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
     onClose();
   }
 
-  const canProceed = name.trim() && templateName.trim() && instance?.connected;
+  const canProceed = name.trim() && templateName.trim() && selectedChannelId !== "";
   const canCreate = leadTab === "crm" ? selectedLeadIds.size > 0 : csvFile !== null;
 
   async function handleCreate() {
@@ -89,7 +91,7 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
           name,
           template_name: templateName,
           type,
-          instance_name: instance?.number || null,
+          channel_id: selectedChannelId,
           send_interval_min: intervalMin,
           send_interval_max: intervalMax,
         }),
@@ -167,6 +169,8 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
 
   if (!open) return null;
 
+  const selectedChannel = channels.find((c) => c.id === selectedChannelId) || null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
@@ -194,6 +198,45 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {step === 1 && (
             <div className="space-y-5">
+              {/* Channel selector — FIRST field */}
+              <div>
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-[#5f6368] mb-2">
+                  Canal WhatsApp (Meta Cloud)
+                </label>
+                {channelsLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="w-3 h-3 border-2 border-[#c8cc8e] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[13px] text-[#5f6368]">Carregando canais...</span>
+                  </div>
+                ) : channels.length === 0 ? (
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#e5e5dc] bg-[#f4f4f0]">
+                    <span className="w-2 h-2 bg-[#9ca3af] rounded-full" />
+                    <span className="text-[13px] text-[#9ca3af]">Nenhum canal Meta Cloud disponivel</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(e.target.value)}
+                    className="bg-[#f6f7ed] border-none rounded-lg text-[13px] px-3 py-2 w-full outline-none focus:ring-1 focus:ring-[#c8cc8e]"
+                  >
+                    <option value="">Selecionar canal...</option>
+                    {channels.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.name} — {ch.phone}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {selectedChannel && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#c8cc8e] text-[#1f1f1f] font-medium">
+                      meta_cloud
+                    </span>
+                    <span className="text-[12px] text-[#5f6368]">{selectedChannel.phone}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Type selection */}
               <div>
                 <label className="block text-[11px] font-medium uppercase tracking-wider text-[#5f6368] mb-2">
@@ -217,31 +260,6 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
                 </div>
               </div>
 
-              {/* Instance */}
-              <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider text-[#5f6368] mb-2">
-                  Instancia WhatsApp
-                </label>
-                {instanceLoading ? (
-                  <div className="flex items-center gap-2 py-2">
-                    <div className="w-3 h-3 border-2 border-[#c8cc8e] border-t-transparent rounded-full animate-spin" />
-                    <span className="text-[13px] text-[#5f6368]">Verificando...</span>
-                  </div>
-                ) : instance?.connected ? (
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-[#c8cc8e] bg-[#f2f3eb]">
-                    <span className="w-2 h-2 bg-green-500 rounded-full" />
-                    <span className="text-[13px] font-medium text-[#1f1f1f]">
-                      Conectado {instance.number ? `(${instance.number})` : ""}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#e5e5dc] bg-[#f4f4f0]">
-                    <span className="w-2 h-2 bg-[#9ca3af] rounded-full" />
-                    <span className="text-[13px] text-[#9ca3af]">Nenhuma instancia conectada</span>
-                  </div>
-                )}
-              </div>
-
               {/* Name + Template */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -252,7 +270,7 @@ export function CreateCampaignModal({ open, onClose }: CreateCampaignModalProps)
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="input-field w-full"
-                    placeholder="Ex: Campanha Atacado Março"
+                    placeholder="Ex: Campanha Atacado Marco"
                     required
                   />
                 </div>

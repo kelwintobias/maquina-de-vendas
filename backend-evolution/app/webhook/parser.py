@@ -12,6 +12,7 @@ class IncomingMessage:
     media_url: str | None = None
     media_mime: str | None = None
     push_name: str | None = None
+    channel_id: str | None = None
 
 
 def parse_webhook_payload(payload: dict) -> list[IncomingMessage]:

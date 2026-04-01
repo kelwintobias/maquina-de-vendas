@@ -17,6 +17,7 @@ async def push_to_buffer(r: aioredis.Redis, msg: IncomingMessage):
     from app.buffer.processor import process_buffered_messages
 
     phone = msg.from_number
+    channel_id = msg.channel_id or ""
 
     # Determine text content (will be resolved later for media)
     if msg.text:
@@ -30,11 +31,15 @@ async def push_to_buffer(r: aioredis.Redis, msg: IncomingMessage):
     if msg.push_name:
         await r.set(f"pushname:{phone}", msg.push_name, ex=86400)
 
+    # Save channel_id for this phone (used when flushing buffer)
+    if channel_id:
+        await r.set(f"channel:{phone}", channel_id, ex=86400)
+
     # Check if buffer is enabled
     buffer_enabled = await r.get("config:buffer_enabled")
     if buffer_enabled == "0":
         logger.info(f"Buffer OFF — processing immediately for {phone}")
-        await process_buffered_messages(phone, text)
+        await process_buffered_messages(phone, text, channel_id)
         return
 
     buffer_key = f"buffer:{phone}"
@@ -92,4 +97,6 @@ async def _wait_and_flush(r: aioredis.Redis, phone: str):
     if messages:
         combined = "\n".join(messages)
         logger.info(f"Buffer flushed for {phone}: {len(messages)} messages")
-        await process_buffered_messages(phone, combined)
+        # Get channel_id stored for this phone
+        channel_id = await r.get(f"channel:{phone}") or ""
+        await process_buffered_messages(phone, combined, channel_id)

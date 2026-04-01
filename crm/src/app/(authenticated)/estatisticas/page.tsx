@@ -7,7 +7,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = "";
 
 const PERIOD_OPTIONS = [
   { label: "Hoje", days: 1 },
@@ -247,8 +247,8 @@ export default function EstatisticasPage() {
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 12, fill: "#8a8a8a" }} />
             <YAxis tick={{ fontSize: 12, fill: "#8a8a8a" }} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
             <Tooltip
-              formatter={(value: number) => [`$${value.toFixed(4)}`, "Custo"]}
-              labelFormatter={(label: string) => formatDate(label)}
+              formatter={(value) => [`$${Number(value).toFixed(4)}`, "Custo"]}
+              labelFormatter={(label) => formatDate(String(label))}
             />
             <Line type="monotone" dataKey="cost" stroke="#6b8e5a" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
           </LineChart>
@@ -267,7 +267,7 @@ export default function EstatisticasPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e5dc" />
               <XAxis dataKey="key" tick={{ fontSize: 12, fill: "#8a8a8a" }} />
               <YAxis tick={{ fontSize: 12, fill: "#8a8a8a" }} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
-              <Tooltip formatter={(value: number) => [`$${value.toFixed(4)}`, "Custo"]} />
+              <Tooltip formatter={(value) => [`$${Number(value).toFixed(4)}`, "Custo"]} />
               <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
                 {byStage.map((entry) => (
                   <Cell key={entry.key} fill={STAGE_COLORS[entry.key] || "#8a8a8a"} />
@@ -287,7 +287,7 @@ export default function EstatisticasPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e5dc" />
               <XAxis dataKey="key" tick={{ fontSize: 12, fill: "#8a8a8a" }} />
               <YAxis tick={{ fontSize: 12, fill: "#8a8a8a" }} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
-              <Tooltip formatter={(value: number) => [`$${value.toFixed(4)}`, "Custo"]} />
+              <Tooltip formatter={(value) => [`$${Number(value).toFixed(4)}`, "Custo"]} />
               <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
                 {byModel.map((entry) => (
                   <Cell key={entry.key} fill={MODEL_COLORS[entry.key] || "#8a8a8a"} />

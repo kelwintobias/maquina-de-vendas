@@ -1,6 +1,32 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/api";
 
+const WEBHOOK_EVENTS = [
+  "MESSAGES_UPSERT",
+  "MESSAGES_UPDATE",
+  "CONNECTION_UPDATE",
+];
+
+async function setWebhook(baseUrl: string, instanceName: string, headers: Record<string, string>, backendUrl: string) {
+  const webhookUrl = `${backendUrl}/webhook/evolution`;
+  try {
+    await fetch(`${baseUrl}/webhook/set/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          events: WEBHOOK_EVENTS,
+          webhookByEvents: false,
+        },
+      }),
+    });
+  } catch (e) {
+    console.error("[evolution/connect] failed to set webhook:", e);
+  }
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,6 +59,7 @@ export async function POST(
     apikey: config.api_key as string,
     "Content-Type": "application/json",
   };
+  const backendUrl = (process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000").replace(/\/+$/, "");
 
   try {
     const connectRes = await fetch(
@@ -44,8 +71,12 @@ export async function POST(
       const data = await connectRes.json();
       const qr = data.base64 ?? data.qrcode?.base64 ?? "";
       if (qr) {
+        // Set webhook while waiting for QR scan
+        await setWebhook(baseUrl, instanceName, headers, backendUrl);
         return NextResponse.json({ qrcode: qr });
       }
+      // Already connected — ensure webhook is set
+      await setWebhook(baseUrl, instanceName, headers, backendUrl);
       return NextResponse.json({ connected: true });
     }
 
@@ -64,6 +95,9 @@ export async function POST(
         const err = await createRes.text();
         return NextResponse.json({ error: err }, { status: createRes.status });
       }
+
+      // Set webhook on newly created instance
+      await setWebhook(baseUrl, instanceName, headers, backendUrl);
 
       const data = await createRes.json();
       const qr = data.qrcode?.base64 ?? data.base64 ?? "";

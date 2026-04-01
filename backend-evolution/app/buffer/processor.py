@@ -15,6 +15,38 @@ from app.db.supabase import get_supabase
 logger = logging.getLogger(__name__)
 
 
+def _get_or_create_conversation(lead_id: str, channel_id: str, stage: str) -> dict:
+    """Get or create a conversation record for a lead+channel pair."""
+    sb = get_supabase()
+    res = (
+        sb.table("conversations")
+        .select("*")
+        .eq("lead_id", lead_id)
+        .eq("channel_id", channel_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return res.data[0]
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    res = (
+        sb.table("conversations")
+        .insert({
+            "lead_id": lead_id,
+            "channel_id": channel_id,
+            "stage": stage,
+            "status": "active",
+            "last_msg_at": now,
+        })
+        .select()
+        .single()
+        .execute()
+    )
+    return res.data
+
+
 async def process_buffered_messages(phone: str, combined_text: str, channel_id: str = ""):
     """Process accumulated buffer messages: resolve media, run agent, humanize, send."""
     try:
@@ -28,6 +60,10 @@ async def process_buffered_messages(phone: str, combined_text: str, channel_id: 
 
         # Get WhatsApp client for this channel
         wa_client = get_whatsapp_client(channel)
+
+        # Ensure conversation record exists
+        stage = lead.get("stage", "secretaria")
+        conversation = _get_or_create_conversation(lead["id"], channel_id, stage)
 
         # Resolve any media placeholders
         resolved_text = await _resolve_media(combined_text, lead)
@@ -61,9 +97,12 @@ async def process_buffered_messages(phone: str, combined_text: str, channel_id: 
             save_message(lead["id"], "user", resolved_text, lead.get("stage", "secretaria"))
             logger.info(f"Human-only channel for {phone} — message saved, no agent response")
 
-        # Update last_msg timestamp
+        # Update last_msg timestamp on lead and conversation
         from datetime import datetime, timezone
-        update_lead(lead["id"], last_msg_at=datetime.now(timezone.utc).isoformat())
+        now = datetime.now(timezone.utc).isoformat()
+        update_lead(lead["id"], last_msg_at=now)
+        sb = get_supabase()
+        sb.table("conversations").update({"last_msg_at": now, "stage": lead.get("stage", stage)}).eq("id", conversation["id"]).execute()
 
     except Exception as e:
         logger.error(f"Error processing messages for {phone}: {e}", exc_info=True)

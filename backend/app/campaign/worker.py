@@ -2,9 +2,9 @@ import asyncio
 import logging
 import random
 
-from app.config import settings
 from app.db.supabase import get_supabase
-from app.whatsapp.client import send_template
+from app.channels.service import get_channel
+from app.providers.registry import get_provider
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,8 @@ async def run_worker():
 
 
 async def process_campaigns():
-    """Find running campaigns and send pending templates."""
     sb = get_supabase()
 
-    # Get running campaigns
     campaigns = (
         sb.table("campaigns")
         .select("*")
@@ -40,14 +38,21 @@ async def process_campaigns():
 
 
 async def process_single_campaign(campaign: dict):
-    """Process one campaign: send templates to pending leads."""
     sb = get_supabase()
     campaign_id = campaign["id"]
+    channel_id = campaign.get("channel_id")
 
-    # Get next batch of unsent leads
-    leads = (
-        sb.table("leads")
-        .select("id, phone")
+    if not channel_id:
+        logger.error(f"Campaign {campaign_id} has no channel_id")
+        return
+
+    channel = get_channel(channel_id)
+    provider = get_provider(channel)
+
+    # Get next batch of conversations to send
+    convs = (
+        sb.table("conversations")
+        .select("id, lead_id, leads(id, phone)")
         .eq("campaign_id", campaign_id)
         .eq("status", "imported")
         .limit(10)
@@ -55,36 +60,37 @@ async def process_single_campaign(campaign: dict):
         .data
     )
 
-    if not leads:
-        # All done — mark campaign as completed
+    if not convs:
         sb.table("campaigns").update({"status": "completed"}).eq("id", campaign_id).execute()
         logger.info(f"Campaign {campaign_id} completed")
         return
 
-    for lead in leads:
-        # Check if campaign is still running (might have been paused)
+    for conv in convs:
+        # Check if campaign is still running
         current = sb.table("campaigns").select("status").eq("id", campaign_id).single().execute().data
         if current["status"] != "running":
             logger.info(f"Campaign {campaign_id} paused, stopping")
             return
 
-        try:
-            await send_template(
-                to=lead["phone"],
-                template_name=campaign["template_name"],
-                components=campaign.get("template_params", {}).get("components"),
-            )
-            sb.table("leads").update({"status": "template_sent"}).eq("id", lead["id"]).execute()
+        lead = conv.get("leads", {})
+        phone = lead.get("phone") if lead else None
+        if not phone:
+            continue
 
-            # Update sent counter
+        try:
+            await provider.send_template(
+                to=phone,
+                template_name=campaign["template_name"],
+                components=campaign.get("template_params", {}).get("components") if campaign.get("template_params") else None,
+            )
+            sb.table("conversations").update({"status": "template_sent"}).eq("id", conv["id"]).execute()
             sb.rpc("increment_campaign_sent", {"campaign_id_param": campaign_id}).execute()
-            logger.info(f"Template sent to {lead['phone']}")
+            logger.info(f"Template sent to {phone}")
 
         except Exception as e:
-            logger.error(f"Failed to send to {lead['phone']}: {e}")
-            sb.table("leads").update({"status": "failed"}).eq("id", lead["id"]).execute()
+            logger.error(f"Failed to send to {phone}: {e}")
+            sb.table("conversations").update({"status": "failed"}).eq("id", conv["id"]).execute()
 
-        # Wait between sends (randomized interval)
         interval = random.randint(
             campaign.get("send_interval_min", 3),
             campaign.get("send_interval_max", 8),

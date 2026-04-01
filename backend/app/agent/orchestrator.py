@@ -5,18 +5,15 @@ from datetime import datetime, timezone, timedelta
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.agent.prompts.base import build_base_prompt
-from app.agent.prompts.secretaria import SECRETARIA_PROMPT
-from app.agent.prompts.atacado import ATACADO_PROMPT
-from app.agent.prompts.private_label import PRIVATE_LABEL_PROMPT
-from app.agent.prompts.exportacao import EXPORTACAO_PROMPT
-from app.agent.prompts.consumo import CONSUMO_PROMPT
 from app.agent.tools import get_tools_for_stage, execute_tool
-from app.leads.service import get_history, save_message
+from app.conversations.service import get_history, save_message
 
 logger = logging.getLogger(__name__)
 
 _openai_client: AsyncOpenAI | None = None
+
+# Brazil timezone
+TZ_BR = timezone(timedelta(hours=-3))
 
 
 def _get_openai() -> AsyncOpenAI:
@@ -25,45 +22,37 @@ def _get_openai() -> AsyncOpenAI:
         _openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
     return _openai_client
 
-STAGE_PROMPTS = {
-    "secretaria": SECRETARIA_PROMPT,
-    "atacado": ATACADO_PROMPT,
-    "private_label": PRIVATE_LABEL_PROMPT,
-    "exportacao": EXPORTACAO_PROMPT,
-    "consumo": CONSUMO_PROMPT,
-}
 
-STAGE_MODELS = {
-    "secretaria": "gpt-4.1",
-    "atacado": "gpt-4.1",
-    "private_label": "gpt-4.1",
-    "exportacao": "gpt-4.1-mini",
-    "consumo": "gpt-4.1-mini",
-}
-
-# Brazil timezone
-TZ_BR = timezone(timedelta(hours=-3))
-
-
-def build_system_prompt(lead: dict) -> str:
+def build_system_prompt(conversation: dict, agent_profile: dict) -> str:
+    """Build system prompt from agent_profile + conversation stage."""
     now = datetime.now(TZ_BR)
-    stage = lead.get("stage", "secretaria")
+    stage = conversation.get("stage", "secretaria")
 
-    base = build_base_prompt(
-        lead_name=lead.get("name"),
-        lead_company=lead.get("company"),
-        now=now,
-    )
+    base_prompt = agent_profile.get("base_prompt", "")
+    stages = agent_profile.get("stages", {})
+    stage_config = stages.get(stage, {})
+    stage_prompt = stage_config.get("prompt", "")
 
-    stage_prompt = STAGE_PROMPTS.get(stage, SECRETARIA_PROMPT)
+    # Inject lead context
+    lead = conversation.get("leads", {}) or {}
+    lead_name = lead.get("name")
+    lead_company = lead.get("company")
 
-    return base + "\n\n" + stage_prompt
+    context_lines = [f"Data/hora atual: {now.strftime('%d/%m/%Y %H:%M')}"]
+    if lead_name:
+        context_lines.append(f"Nome do lead: {lead_name}")
+    if lead_company:
+        context_lines.append(f"Empresa: {lead_company}")
+
+    context = "\n".join(context_lines)
+
+    return f"{base_prompt}\n\n--- CONTEXTO ---\n{context}\n\n--- STAGE: {stage} ---\n{stage_prompt}"
 
 
-def build_messages(lead: dict, user_text: str) -> list[dict]:
+def build_messages(conversation: dict, agent_profile: dict, user_text: str) -> list[dict]:
     """Build the messages array for OpenAI from conversation history."""
-    system_prompt = build_system_prompt(lead)
-    history = get_history(lead["id"], limit=30)
+    system_prompt = build_system_prompt(conversation, agent_profile)
+    history = get_history(conversation["id"], limit=30)
 
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -76,16 +65,24 @@ def build_messages(lead: dict, user_text: str) -> list[dict]:
     return messages
 
 
-async def run_agent(lead: dict, user_text: str) -> str:
-    """Run the AI agent for a lead and return the response text."""
-    stage = lead.get("stage", "secretaria")
-    model = STAGE_MODELS.get(stage, "gpt-4.1")
-    tools = get_tools_for_stage(stage)
+async def run_agent(conversation: dict, agent_profile: dict, user_text: str) -> str:
+    """Run the AI agent for a conversation and return the response text."""
+    stage = conversation.get("stage", "secretaria")
+    lead = conversation.get("leads", {}) or {}
+    lead_id = lead.get("id") or conversation.get("lead_id")
+    conversation_id = conversation["id"]
 
-    messages = build_messages(lead, user_text)
+    # Get model and tools from agent_profile stage config
+    stages = agent_profile.get("stages", {})
+    stage_config = stages.get(stage, {})
+    model = stage_config.get("model", agent_profile.get("model", "gpt-4.1"))
+    tool_names = stage_config.get("tools", [])
+    tools = get_tools_for_stage(tool_names)
+
+    messages = build_messages(conversation, agent_profile, user_text)
 
     # Save user message
-    save_message(lead["id"], "user", user_text, stage)
+    save_message(conversation_id, lead_id, "user", user_text, stage)
 
     # Call OpenAI
     response = await _get_openai().chat.completions.create(
@@ -100,7 +97,6 @@ async def run_agent(lead: dict, user_text: str) -> str:
 
     # Process tool calls if any
     while message.tool_calls:
-        # Add assistant message with tool calls
         messages.append(message.model_dump())
 
         for tool_call in message.tool_calls:
@@ -108,7 +104,7 @@ async def run_agent(lead: dict, user_text: str) -> str:
             func_args = json.loads(tool_call.function.arguments)
 
             result = await execute_tool(
-                func_name, func_args, lead["id"], lead["phone"]
+                func_name, func_args, conversation_id, lead_id,
             )
 
             messages.append({
@@ -117,7 +113,6 @@ async def run_agent(lead: dict, user_text: str) -> str:
                 "content": result,
             })
 
-        # Call again to get the text response after tool execution
         response = await _get_openai().chat.completions.create(
             model=model,
             messages=messages,
@@ -130,7 +125,7 @@ async def run_agent(lead: dict, user_text: str) -> str:
     assistant_text = message.content or ""
 
     # Save assistant message
-    save_message(lead["id"], "assistant", assistant_text, stage)
+    save_message(conversation_id, lead_id, "assistant", assistant_text, stage)
 
-    logger.info(f"Agent response for {lead['phone']} (stage={stage}): {assistant_text[:100]}...")
+    logger.info(f"Agent response for conversation {conversation_id} (stage={stage}): {assistant_text[:100]}...")
     return assistant_text

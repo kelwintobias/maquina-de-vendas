@@ -2,13 +2,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Meta WhatsApp
-    meta_phone_number_id: str
-    meta_access_token: str
-    meta_verify_token: str = "valeria_webhook_verify"
-    meta_app_secret: str = ""
-    meta_api_version: str = "v21.0"
-
     # OpenAI
     openai_api_key: str
 
@@ -28,7 +21,7 @@ class Settings(BaseSettings):
     buffer_extend_timeout: int = 10
     buffer_max_timeout: int = 45
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 _settings: Settings | None = None
@@ -41,7 +34,6 @@ def get_settings() -> Settings:
     return _settings
 
 
-# Lazy proxy so `from app.config import settings` works at import time
 class _SettingsProxy:
     def __getattr__(self, name: str):
         return getattr(get_settings(), name)

@@ -52,3 +52,29 @@ async def api_update_channel(channel_id: str, body: ChannelUpdate):
 async def api_delete_channel(channel_id: str):
     delete_channel(channel_id)
     return {"status": "deleted"}
+
+
+class SendMessage(BaseModel):
+    conversation_id: str | None = None
+    to: str
+    text: str
+
+
+@router.post("/{channel_id}/send")
+async def send_message(channel_id: str, body: SendMessage):
+    """Send a message through a channel (used by CRM for human chat)."""
+    from app.providers.registry import get_provider
+    from app.conversations.service import save_message
+
+    channel = get_channel(channel_id)
+    provider = get_provider(channel)
+
+    await provider.send_text(body.to, body.text)
+
+    if body.conversation_id:
+        from app.db.supabase import get_supabase
+        sb = get_supabase()
+        conv = sb.table("conversations").select("lead_id, stage").eq("id", body.conversation_id).single().execute().data
+        save_message(body.conversation_id, conv["lead_id"], "assistant", body.text, conv.get("stage"))
+
+    return {"status": "sent"}

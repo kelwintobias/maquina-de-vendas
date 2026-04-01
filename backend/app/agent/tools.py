@@ -1,8 +1,8 @@
 import logging
 from typing import Any
 
-from app.leads.service import update_lead, save_message
-from app.whatsapp.client import send_text
+from app.conversations.service import update_conversation, save_message
+from app.leads.service import update_lead
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,6 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "stage": {
                         "type": "string",
-                        "enum": ["secretaria", "atacado", "private_label", "exportacao", "consumo"],
                         "description": "Stage de destino",
                     }
                 },
@@ -64,7 +63,6 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "categoria": {
                         "type": "string",
-                        "enum": ["atacado", "private_label"],
                         "description": "Categoria do catalogo",
                     }
                 },
@@ -74,28 +72,22 @@ TOOLS_SCHEMA = [
     },
 ]
 
+_TOOLS_BY_NAME = {t["function"]["name"]: t for t in TOOLS_SCHEMA}
 
-def get_tools_for_stage(stage: str) -> list[dict]:
-    """Return tools available for a given stage."""
-    stage_tools = {
-        "secretaria": ["salvar_nome", "mudar_stage"],
-        "atacado": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos"],
-        "private_label": ["salvar_nome", "mudar_stage", "encaminhar_humano", "enviar_fotos"],
-        "exportacao": ["salvar_nome", "mudar_stage", "encaminhar_humano"],
-        "consumo": ["salvar_nome"],
-    }
-    allowed = stage_tools.get(stage, ["salvar_nome"])
-    return [t for t in TOOLS_SCHEMA if t["function"]["name"] in allowed]
+
+def get_tools_for_stage(tool_names: list[str]) -> list[dict]:
+    """Return tool schemas for the given tool names."""
+    return [_TOOLS_BY_NAME[name] for name in tool_names if name in _TOOLS_BY_NAME]
 
 
 async def execute_tool(
     tool_name: str,
     args: dict[str, Any],
+    conversation_id: str,
     lead_id: str,
-    phone: str,
 ) -> str:
     """Execute a tool call and return a result string for the AI."""
-    logger.info(f"Executing tool {tool_name} with args {args} for lead {lead_id}")
+    logger.info(f"Executing tool {tool_name} with args {args} for conversation {conversation_id}")
 
     if tool_name == "salvar_nome":
         update_lead(lead_id, name=args["name"])
@@ -103,19 +95,23 @@ async def execute_tool(
 
     elif tool_name == "mudar_stage":
         new_stage = args["stage"]
-        update_lead(lead_id, stage=new_stage)
+        update_conversation(conversation_id, stage=new_stage)
         return f"Stage alterado para: {new_stage}"
 
     elif tool_name == "encaminhar_humano":
-        # TODO: implement actual human handoff (e.g., notify via WhatsApp group or webhook)
-        update_lead(lead_id, status="converted")
-        save_message(lead_id, "system", f"Lead encaminhado para {args['vendedor']}: {args['motivo']}")
+        update_conversation(conversation_id, status="converted")
+        save_message(
+            conversation_id, lead_id, "system",
+            f"Lead encaminhado para {args['vendedor']}: {args['motivo']}",
+        )
         return f"Lead encaminhado para {args['vendedor']}"
 
     elif tool_name == "enviar_fotos":
-        # TODO: implement photo sending with actual image URLs
         categoria = args["categoria"]
-        save_message(lead_id, "system", f"Fotos de {categoria} enviadas")
+        save_message(
+            conversation_id, lead_id, "system",
+            f"Fotos de {categoria} enviadas",
+        )
         return f"Fotos de {categoria} enviadas ao lead"
 
     return f"Tool {tool_name} nao reconhecida"

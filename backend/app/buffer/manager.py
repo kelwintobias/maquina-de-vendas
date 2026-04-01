@@ -8,69 +8,70 @@ from app.webhook.parser import IncomingMessage
 
 logger = logging.getLogger(__name__)
 
-# Track active timers per phone number
 _active_timers: dict[str, asyncio.Task] = {}
 
 
-async def push_to_buffer(r: aioredis.Redis, msg: IncomingMessage):
-    """Push a message to the buffer. Start or extend the timer."""
+async def push_to_buffer(r: aioredis.Redis, msg: IncomingMessage, channel: dict):
+    """Push a message to the buffer. Key includes channel_id for isolation."""
     phone = msg.from_number
-    buffer_key = f"buffer:{phone}"
-    lock_key = f"buffer:{phone}:lock"
+    channel_id = channel["id"]
+    buffer_key = f"buffer:{channel_id}:{phone}"
+    lock_key = f"buffer:{channel_id}:{phone}:lock"
+    timer_key = f"{channel_id}:{phone}"
 
-    # Determine text content (will be resolved later for media)
-    text = msg.text or f"[{msg.type}: media_id={msg.media_id}]"
+    # Build text content (media resolved later)
+    if msg.media_id:
+        text = msg.text or f"[{msg.type}: media_id={msg.media_id}]"
+    elif msg.media_url:
+        text = msg.text or f"[{msg.type}: media_url={msg.media_url}]"
+    else:
+        text = msg.text or ""
 
-    # Push message to the list
     await r.rpush(buffer_key, text)
 
-    # Check if timer is already active
     has_lock = await r.exists(lock_key)
 
     if has_lock:
-        # Timer already running — extend it
         current_ttl = await r.ttl(lock_key)
         new_ttl = min(
             current_ttl + settings.buffer_extend_timeout,
             settings.buffer_max_timeout,
         )
         await r.expire(lock_key, new_ttl)
-        logger.info(f"Buffer extended for {phone}: TTL now {new_ttl}s")
+        logger.info(f"Buffer extended for {phone} on channel {channel['name']}: TTL now {new_ttl}s")
     else:
-        # First message — set lock and start timer
         await r.set(lock_key, "1", ex=settings.buffer_base_timeout)
-        logger.info(f"Buffer started for {phone}: {settings.buffer_base_timeout}s")
+        logger.info(f"Buffer started for {phone} on channel {channel['name']}: {settings.buffer_base_timeout}s")
 
-        # Start async timer
-        if phone in _active_timers:
-            _active_timers[phone].cancel()
+        if timer_key in _active_timers:
+            _active_timers[timer_key].cancel()
 
-        _active_timers[phone] = asyncio.create_task(
-            _wait_and_flush(r, phone)
+        _active_timers[timer_key] = asyncio.create_task(
+            _wait_and_flush(r, phone, channel)
         )
 
 
-async def _wait_and_flush(r: aioredis.Redis, phone: str):
+async def _wait_and_flush(r: aioredis.Redis, phone: str, channel: dict):
     """Wait for the buffer to expire, then flush."""
     from app.buffer.processor import process_buffered_messages
 
+    channel_id = channel["id"]
+    lock_key = f"buffer:{channel_id}:{phone}:lock"
+    buffer_key = f"buffer:{channel_id}:{phone}"
+    timer_key = f"{channel_id}:{phone}"
+
     while True:
         await asyncio.sleep(1)
-        lock_key = f"buffer:{phone}:lock"
         exists = await r.exists(lock_key)
         if not exists:
             break
 
-    buffer_key = f"buffer:{phone}"
-
-    # Get all messages
     messages = await r.lrange(buffer_key, 0, -1)
     await r.delete(buffer_key)
 
-    # Clean up timer reference
-    _active_timers.pop(phone, None)
+    _active_timers.pop(timer_key, None)
 
     if messages:
         combined = "\n".join(messages)
-        logger.info(f"Buffer flushed for {phone}: {len(messages)} messages")
-        await process_buffered_messages(phone, combined)
+        logger.info(f"Buffer flushed for {phone} on channel {channel['name']}: {len(messages)} messages")
+        await process_buffered_messages(phone, combined, channel)

@@ -26,7 +26,7 @@ app = FastAPI(title="ValerIA", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=[settings.frontend_url, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,10 +36,14 @@ app.add_middleware(
 from app.webhook.router import router as webhook_router
 from app.leads.router import router as leads_router
 from app.campaign.router import router as campaign_router
+from app.channels.router import router as channels_router
+from app.agent_profiles.router import router as agent_profiles_router
 
 app.include_router(webhook_router)
 app.include_router(leads_router)
 app.include_router(campaign_router)
+app.include_router(channels_router)
+app.include_router(agent_profiles_router)
 
 
 @app.get("/health")

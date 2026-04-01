@@ -3,12 +3,14 @@ from pydantic import BaseModel
 
 from app.db.supabase import get_supabase
 from app.campaign.importer import parse_csv
+from app.channels.service import get_channel
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 
 class CampaignCreate(BaseModel):
     name: str
+    channel_id: str
     template_name: str
     template_params: dict | None = None
     send_interval_min: int = 3
@@ -18,12 +20,22 @@ class CampaignCreate(BaseModel):
 @router.get("")
 async def list_campaigns():
     sb = get_supabase()
-    result = sb.table("campaigns").select("*").order("created_at", desc=True).execute()
+    result = (
+        sb.table("campaigns")
+        .select("*, channels(id, name, phone)")
+        .order("created_at", desc=True)
+        .execute()
+    )
     return {"data": result.data}
 
 
 @router.post("")
 async def create_campaign(campaign: CampaignCreate):
+    # Validate channel is meta_cloud
+    channel = get_channel(campaign.channel_id)
+    if channel["provider"] != "meta_cloud":
+        raise HTTPException(400, "Campanhas so podem ser criadas em channels Meta Cloud API")
+
     sb = get_supabase()
     result = sb.table("campaigns").insert(campaign.model_dump()).execute()
     return result.data[0]
@@ -32,7 +44,13 @@ async def create_campaign(campaign: CampaignCreate):
 @router.get("/{campaign_id}")
 async def get_campaign(campaign_id: str):
     sb = get_supabase()
-    result = sb.table("campaigns").select("*").eq("id", campaign_id).single().execute()
+    result = (
+        sb.table("campaigns")
+        .select("*, channels(id, name, phone)")
+        .eq("id", campaign_id)
+        .single()
+        .execute()
+    )
     return result.data
 
 
@@ -46,22 +64,34 @@ async def import_leads(campaign_id: str, file: UploadFile = File(...)):
 
     sb = get_supabase()
 
-    # Create leads (ignore duplicates)
+    # Get campaign to know the channel_id
+    campaign = sb.table("campaigns").select("channel_id").eq("id", campaign_id).single().execute().data
+    channel_id = campaign["channel_id"]
+
     created = 0
     for phone in result.valid:
         try:
-            sb.table("leads").insert({
-                "phone": phone,
+            # Create global lead
+            lead_result = sb.table("leads").select("id").eq("phone", phone).execute()
+            if lead_result.data:
+                lead_id = lead_result.data[0]["id"]
+            else:
+                lead_result = sb.table("leads").insert({"phone": phone}).execute()
+                lead_id = lead_result.data[0]["id"]
+
+            # Create conversation for this lead+channel
+            sb.table("conversations").insert({
+                "lead_id": lead_id,
+                "channel_id": channel_id,
                 "campaign_id": campaign_id,
                 "status": "imported",
                 "stage": "pending",
             }).execute()
             created += 1
+
         except Exception:
-            # Duplicate phone, skip
             pass
 
-    # Update campaign total
     sb.table("campaigns").update({"total_leads": created}).eq("id", campaign_id).execute()
 
     return {
@@ -75,29 +105,26 @@ async def import_leads(campaign_id: str, file: UploadFile = File(...)):
 async def start_campaign(campaign_id: str):
     sb = get_supabase()
 
-    # Get campaign
     campaign = sb.table("campaigns").select("*").eq("id", campaign_id).single().execute().data
 
     if campaign["status"] == "running":
         raise HTTPException(400, "Campanha ja esta rodando")
 
-    # Get leads for this campaign that haven't been sent
-    leads = (
-        sb.table("leads")
-        .select("id, phone")
+    convs = (
+        sb.table("conversations")
+        .select("id")
         .eq("campaign_id", campaign_id)
         .eq("status", "imported")
         .execute()
         .data
     )
 
-    if not leads:
+    if not convs:
         raise HTTPException(400, "Nenhum lead pendente para envio")
 
-    # Update campaign status — worker picks up from there
     sb.table("campaigns").update({"status": "running"}).eq("id", campaign_id).execute()
 
-    return {"status": "started", "leads_queued": len(leads)}
+    return {"status": "started", "leads_queued": len(convs)}
 
 
 @router.post("/{campaign_id}/pause")

@@ -5,16 +5,16 @@ import { createClient } from "@/lib/supabase/client";
 import { ChatList } from "@/components/conversas/chat-list";
 import { ChatView } from "@/components/conversas/chat-view";
 import { ContactDetail } from "@/components/conversas/contact-detail";
-import type { EvolutionChat, Lead, Tag } from "@/lib/types";
+import type { Conversation, Channel, Tag, Lead } from "@/lib/types";
 
 export default function ConversasPage() {
   const supabase = createClient();
-  const [chats, setChats] = useState<EvolutionChat[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [leadTagsMap, setLeadTagsMap] = useState<Record<string, string[]>>({});
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
-  const [selectedPushName, setSelectedPushName] = useState<string | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("");
   const [activeTab, setActiveTab] = useState("todos");
   const [loading, setLoading] = useState(true);
 
@@ -22,43 +22,54 @@ export default function ConversasPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    fetchConversations();
+  }, [selectedChannelId]);
+
   async function loadData() {
     setLoading(true);
-    await Promise.all([fetchChats(), fetchLeads(), fetchTags()]);
+    await Promise.all([fetchConversations(), fetchChannels(), fetchTags(), fetchLeadTags()]);
     setLoading(false);
   }
 
-  async function fetchChats() {
+  async function fetchConversations() {
     try {
-      const res = await fetch("/api/evolution/chats");
+      const url = selectedChannelId
+        ? `/api/conversations?channel_id=${selectedChannelId}`
+        : "/api/conversations";
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setChats(Array.isArray(data) ? data : []);
+        setConversations(Array.isArray(data) ? data : []);
       }
     } catch {
       // ignore
     }
   }
 
-  async function fetchLeads() {
-    const { data } = await supabase
-      .from("leads")
-      .select("*")
-      .order("last_msg_at", { ascending: false });
-    if (data) {
-      setLeads(data);
-      // Fetch lead_tags for all leads
-      const { data: ltData } = await supabase
-        .from("lead_tags")
-        .select("lead_id, tag_id");
-      if (ltData) {
-        const map: Record<string, string[]> = {};
-        ltData.forEach((row: { lead_id: string; tag_id: string }) => {
-          if (!map[row.lead_id]) map[row.lead_id] = [];
-          map[row.lead_id].push(row.tag_id);
-        });
-        setLeadTagsMap(map);
+  async function fetchChannels() {
+    try {
+      const res = await fetch("/api/channels");
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(Array.isArray(data) ? data : []);
       }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchLeadTags() {
+    const { data: ltData } = await supabase
+      .from("lead_tags")
+      .select("lead_id, tag_id");
+    if (ltData) {
+      const map: Record<string, string[]> = {};
+      ltData.forEach((row: { lead_id: string; tag_id: string }) => {
+        if (!map[row.lead_id]) map[row.lead_id] = [];
+        map[row.lead_id].push(row.tag_id);
+      });
+      setLeadTagsMap(map);
     }
   }
 
@@ -74,14 +85,16 @@ export default function ConversasPage() {
     }
   }
 
-  function handleSelectChat(phone: string, pushName: string | null) {
-    setSelectedPhone(phone);
-    setSelectedPushName(pushName);
+  function handleSelectConversation(conv: Conversation) {
+    setSelectedConversation(conv);
   }
 
-  const selectedLead = selectedPhone
-    ? leads.find((l) => l.phone === selectedPhone) || null
-    : null;
+  function handleChannelChange(channelId: string) {
+    setSelectedChannelId(channelId);
+    setSelectedConversation(null);
+  }
+
+  const selectedLead = selectedConversation?.leads as Lead | undefined | null;
 
   const selectedLeadTags = selectedLead
     ? tags.filter((t) => leadTagsMap[selectedLead.id]?.includes(t.id))
@@ -106,28 +119,6 @@ export default function ConversasPage() {
     }
   }
 
-  async function handleCreateLead() {
-    if (!selectedPhone) return;
-
-    const { data, error } = await supabase
-      .from("leads")
-      .insert({
-        phone: selectedPhone,
-        name: selectedPushName,
-        status: "active",
-        stage: "secretaria",
-        seller_stage: "novo",
-        human_control: true,
-        channel: "evolution",
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
-      setLeads((prev) => [data, ...prev]);
-    }
-  }
-
   async function handleSellerStageChange(stage: string) {
     if (!selectedLead) return;
 
@@ -136,18 +127,29 @@ export default function ConversasPage() {
       .update({ seller_stage: stage })
       .eq("id", selectedLead.id);
 
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === selectedLead.id ? { ...l, seller_stage: stage } : l
-      )
+    // Update the conversation's nested lead data
+    setConversations((prev) =>
+      prev.map((conv) => {
+        if (conv.id === selectedConversation?.id && conv.leads) {
+          return {
+            ...conv,
+            leads: { ...(conv.leads as Lead), seller_stage: stage },
+          };
+        }
+        return conv;
+      })
     );
-  }
 
-  function handleLeadCreated(lead: Lead) {
-    setLeads((prev) => {
-      if (prev.find((l) => l.id === lead.id)) return prev;
-      return [lead, ...prev];
-    });
+    if (selectedConversation?.leads) {
+      setSelectedConversation((prev) =>
+        prev
+          ? {
+              ...prev,
+              leads: { ...(prev.leads as Lead), seller_stage: stage },
+            }
+          : prev
+      );
+    }
   }
 
   if (loading) {
@@ -164,31 +166,27 @@ export default function ConversasPage() {
   return (
     <div className="flex h-full bg-[#f6f7ed]">
       <ChatList
-        chats={chats}
-        leads={leads}
+        conversations={conversations}
+        channels={channels}
         activeTab={activeTab}
-        selectedPhone={selectedPhone}
-        onSelectChat={handleSelectChat}
+        selectedConversationId={selectedConversation?.id || null}
+        selectedChannelId={selectedChannelId}
+        onSelectConversation={handleSelectConversation}
         onTabChange={setActiveTab}
+        onChannelChange={handleChannelChange}
       />
 
-      {selectedPhone ? (
+      {selectedConversation ? (
         <>
           <ChatView
-            phone={selectedPhone}
-            lead={selectedLead}
+            conversation={selectedConversation}
             tags={tags}
-            pushName={selectedPushName}
-            onLeadCreated={handleLeadCreated}
           />
           <ContactDetail
-            phone={selectedPhone}
-            pushName={selectedPushName}
-            lead={selectedLead}
+            conversation={selectedConversation}
             tags={tags}
             leadTags={selectedLeadTags}
             onTagToggle={handleTagToggle}
-            onCreateLead={handleCreateLead}
             onSellerStageChange={handleSellerStageChange}
           />
         </>

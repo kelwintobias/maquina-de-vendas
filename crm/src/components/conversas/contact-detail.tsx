@@ -4,31 +4,27 @@ import { useState } from "react";
 import { SELLER_STAGES, AGENT_STAGES } from "@/lib/constants";
 import { EditableField } from "./editable-field";
 import { createClient } from "@/lib/supabase/client";
-import type { Lead, Tag } from "@/lib/types";
+import type { Lead, Tag, Conversation } from "@/lib/types";
 
 interface ContactDetailProps {
-  phone: string;
-  pushName: string | null;
-  lead: Lead | null;
+  conversation: Conversation;
   tags: Tag[];
   leadTags: Tag[];
   onTagToggle: (tagId: string, add: boolean) => void;
-  onCreateLead: () => void;
   onSellerStageChange: (stage: string) => void;
 }
 
 export function ContactDetail({
-  phone,
-  pushName,
-  lead,
+  conversation,
   tags,
   leadTags,
   onTagToggle,
-  onCreateLead,
   onSellerStageChange,
 }: ContactDetailProps) {
   const [showTagDropdown, setShowTagDropdown] = useState(false);
-  const displayName = lead?.name || pushName || phone;
+  const lead = conversation.leads as Lead | undefined | null;
+  const channel = conversation.channels;
+  const displayName = lead?.name || lead?.phone || "Desconhecido";
   const supabase = createClient();
 
   const stageInfo = lead ? AGENT_STAGES.find((s) => s.key === lead.stage) : null;
@@ -46,6 +42,8 @@ export function ContactDetail({
     ? Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
+  const isMetaCloud = channel?.provider === "meta_cloud";
+
   return (
     <div className="w-[320px] bg-white border-l border-[#e5e5dc] flex flex-col h-full overflow-y-auto">
       {/* Avatar + Name */}
@@ -54,7 +52,18 @@ export function ContactDetail({
           {displayName.charAt(0).toUpperCase()}
         </div>
         <h3 className="text-[18px] font-semibold text-[#1f1f1f]">{displayName}</h3>
-        <p className="text-[13px] text-[#5f6368]">{phone}</p>
+        <p className="text-[13px] text-[#5f6368]">{lead?.phone || ""}</p>
+        {channel && (
+          <span
+            className={`mt-2 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+              isMetaCloud
+                ? "bg-[#c8cc8e] text-[#1f1f1f]"
+                : "bg-[#93c5fd] text-[#1e3a5f]"
+            }`}
+          >
+            {channel.name}
+          </span>
+        )}
         {lead?.on_hold && (
           <span className="mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f0ecd0] text-[#8a7a2a]">
             Em espera
@@ -167,6 +176,10 @@ export function ContactDetail({
               <span className="text-[13px] font-medium text-[#1f1f1f]">{lead.channel}</span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="text-[12px] text-[#5f6368]">Canal</span>
+              <span className="text-[13px] font-medium text-[#1f1f1f]">{channel?.name || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-[12px] text-[#5f6368]">Criado em</span>
               <span className="text-[13px] font-medium text-[#1f1f1f]">
                 {new Date(lead.created_at).toLocaleDateString("pt-BR")}
@@ -177,12 +190,9 @@ export function ContactDetail({
       ) : (
         <div className="p-4 space-y-4">
           <div className="bg-[#f6f7ed] border border-[#e5e5dc] rounded-xl p-3">
-            <p className="text-[#5f6368] text-sm font-medium">Contato pessoal</p>
-            <p className="text-[#9ca3af] text-xs mt-1">Este contato nao esta cadastrado como lead.</p>
+            <p className="text-[#5f6368] text-sm font-medium">Contato sem lead</p>
+            <p className="text-[#9ca3af] text-xs mt-1">Este contato nao esta cadastrado como lead no CRM.</p>
           </div>
-          <button onClick={onCreateLead} className="btn-primary w-full py-2 rounded-xl text-sm">
-            Criar Lead
-          </button>
         </div>
       )}
     </div>

@@ -2,19 +2,17 @@
 
 import { useState } from "react";
 import { CONVERSATION_TABS, AGENT_STAGES } from "@/lib/constants";
-import type { EvolutionChat, Lead } from "@/lib/types";
+import type { Conversation, Channel } from "@/lib/types";
 
 interface ChatListProps {
-  chats: EvolutionChat[];
-  leads: Lead[];
+  conversations: Conversation[];
+  channels: Channel[];
   activeTab: string;
-  selectedPhone: string | null;
-  onSelectChat: (phone: string, pushName: string | null) => void;
+  selectedConversationId: string | null;
+  selectedChannelId: string;
+  onSelectConversation: (conv: Conversation) => void;
   onTabChange: (tab: string) => void;
-}
-
-function extractPhone(remoteJid: string): string {
-  return remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "");
+  onChannelChange: (channelId: string) => void;
 }
 
 function getStageColor(stage: string | undefined): string {
@@ -29,13 +27,14 @@ function getStageColor(stage: string | undefined): string {
   return avatarColorMap[stage] || "bg-[#8a8a80]";
 }
 
-function getInitial(name: string | null): string {
+function getInitial(name: string | null | undefined): string {
   if (!name) return "?";
   return name.charAt(0).toUpperCase();
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
+function formatTime(ts: string | null): string {
+  if (!ts) return "";
+  const date = new Date(ts);
   const now = new Date();
   const isToday =
     date.getDate() === now.getDate() &&
@@ -49,51 +48,51 @@ function formatTime(timestamp: number): string {
 }
 
 export function ChatList({
-  chats,
-  leads,
+  conversations,
+  channels,
   activeTab,
-  selectedPhone,
-  onSelectChat,
+  selectedConversationId,
+  selectedChannelId,
+  onSelectConversation,
   onTabChange,
+  onChannelChange,
 }: ChatListProps) {
   const [search, setSearch] = useState("");
 
-  const leadsMap = new Map(leads.map((l) => [l.phone, l]));
-
-  const enrichedChats = chats
-    .filter((c) => c.remoteJid.endsWith("@s.whatsapp.net"))
-    .map((chat) => {
-      const phone = extractPhone(chat.remoteJid);
-      const lead = leadsMap.get(phone);
-      const displayName = lead?.name || chat.pushName || phone;
-      const stage = lead?.stage || null;
-      return { ...chat, phone, lead, displayName, stage };
-    });
-
-  const filteredChats = enrichedChats
-    .filter((chat) => {
+  const filteredConversations = conversations
+    .filter((conv) => {
       if (activeTab === "todos") return true;
-      if (activeTab === "pessoal") return !chat.lead;
-      return chat.stage === activeTab;
+      if (activeTab === "pessoal") return !conv.leads;
+      return conv.leads?.stage === activeTab;
     })
-    .filter((chat) => {
+    .filter((conv) => {
       if (!search) return true;
       const q = search.toLowerCase();
-      return (
-        chat.displayName.toLowerCase().includes(q) ||
-        chat.phone.includes(q)
-      );
-    })
-    .sort((a, b) => {
-      const tA = a.lastMessage?.timestamp || 0;
-      const tB = b.lastMessage?.timestamp || 0;
-      return tB - tA;
+      const name = conv.leads?.name || conv.leads?.phone || "";
+      const phone = conv.leads?.phone || "";
+      return name.toLowerCase().includes(q) || phone.includes(q);
     });
 
   return (
     <div className="w-[320px] bg-white border-r border-[#e5e5dc] flex flex-col h-full">
+      {/* Channel filter */}
+      <div className="px-3 pt-3 pb-2">
+        <select
+          value={selectedChannelId}
+          onChange={(e) => onChannelChange(e.target.value)}
+          className="bg-[#f6f7ed] border-none rounded-lg text-[13px] px-3 py-2 w-full outline-none focus:ring-1 focus:ring-[#c8cc8e]"
+        >
+          <option value="">Todos os canais</option>
+          {channels.map((ch) => (
+            <option key={ch.id} value={ch.id}>
+              {ch.name} — {ch.phone}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Search */}
-      <div className="p-3">
+      <div className="px-3 pb-2">
         <input
           type="text"
           value={search}
@@ -122,53 +121,65 @@ export function ChatList({
 
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto">
-        {filteredChats.length === 0 && (
+        {filteredConversations.length === 0 && (
           <p className="text-[#9ca3af] text-sm text-center py-8">
             Nenhuma conversa encontrada.
           </p>
         )}
-        {filteredChats.map((chat) => (
-          <button
-            key={chat.remoteJid}
-            onClick={() => onSelectChat(chat.phone, chat.pushName)}
-            className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors ${
-              selectedPhone === chat.phone
-                ? "bg-[#f6f7ed]"
-                : "hover:bg-[#f6f7ed]/60"
-            }`}
-          >
-            {/* Avatar */}
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${getStageColor(chat.stage || undefined)}`}
-            >
-              {getInitial(chat.displayName)}
-            </div>
+        {filteredConversations.map((conv) => {
+          const lead = conv.leads;
+          const channel = conv.channels;
+          const displayName = lead?.name || lead?.phone || "Desconhecido";
+          const stage = lead?.stage;
+          const isMetaCloud = channel?.provider === "meta_cloud";
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#1f1f1f] truncate font-semibold">
-                  {chat.displayName}
-                </span>
-                {chat.lastMessage && (
-                  <span className="text-[11px] text-[#9ca3af] flex-shrink-0 ml-2">
-                    {formatTime(chat.lastMessage.timestamp)}
-                  </span>
-                )}
+          return (
+            <button
+              key={conv.id}
+              onClick={() => onSelectConversation(conv)}
+              className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors ${
+                selectedConversationId === conv.id
+                  ? "bg-[#f6f7ed]"
+                  : "hover:bg-[#f6f7ed]/60"
+              }`}
+            >
+              {/* Avatar */}
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${getStageColor(stage)}`}
+              >
+                {getInitial(displayName)}
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-[#9ca3af] truncate">
-                  {chat.lastMessage?.content || ""}
-                </span>
-                {chat.unreadCount > 0 && (
-                  <span className="bg-[#1f1f1f] text-white text-[11px] rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 ml-2">
-                    {chat.unreadCount}
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[13px] text-[#1f1f1f] truncate font-semibold">
+                    {displayName}
                   </span>
-                )}
+                  <span className="text-[11px] text-[#9ca3af] flex-shrink-0">
+                    {formatTime(conv.last_msg_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {channel && (
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
+                        isMetaCloud
+                          ? "bg-[#c8cc8e] text-[#1f1f1f]"
+                          : "bg-[#93c5fd] text-[#1e3a5f]"
+                      }`}
+                    >
+                      {channel.name}
+                    </span>
+                  )}
+                  <span className="text-[12px] text-[#9ca3af] truncate">
+                    {lead?.phone || ""}
+                  </span>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

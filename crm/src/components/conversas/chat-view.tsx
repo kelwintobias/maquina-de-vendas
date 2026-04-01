@@ -1,35 +1,20 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { EvolutionMessage, Lead, Tag } from "@/lib/types";
+import type { Message, Conversation, Tag, Lead } from "@/lib/types";
 
 interface ChatViewProps {
-  phone: string;
-  lead: Lead | null;
+  conversation: Conversation;
   tags: Tag[];
-  pushName: string | null;
-  onLeadCreated?: (lead: Lead) => void;
 }
 
-function extractText(msg: EvolutionMessage): string {
-  if (msg.message.conversation) return msg.message.conversation;
-  if (msg.message.imageMessage?.caption) return msg.message.imageMessage.caption;
-  if (msg.message.documentMessage?.fileName) return `[Documento: ${msg.message.documentMessage.fileName}]`;
-  if (msg.message.audioMessage) return "[Audio]";
-  if (msg.message.imageMessage) return "[Imagem]";
-  if (msg.message.stickerMessage) return "[Sticker]";
-  if (msg.message.videoMessage?.caption) return msg.message.videoMessage.caption;
-  if (msg.message.videoMessage) return "[Video]";
-  return "[Midia]";
-}
-
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
+function formatTime(ts: string): string {
+  const date = new Date(ts);
   return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatViewProps) {
-  const [messages, setMessages] = useState<EvolutionMessage[]>([]);
+export function ChatView({ conversation, tags }: ChatViewProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -40,7 +25,7 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
     setLoading(true);
     setMessages([]);
     fetchMessages();
-  }, [phone]);
+  }, [conversation.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -48,13 +33,10 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
 
   async function fetchMessages() {
     try {
-      const res = await fetch(`/api/evolution/messages/${phone}`);
+      const res = await fetch(`/api/conversations/${conversation.id}/messages`);
       if (res.ok) {
         const data = await res.json();
-        const sorted = (Array.isArray(data) ? data : []).sort(
-          (a: EvolutionMessage, b: EvolutionMessage) => a.messageTimestamp - b.messageTimestamp
-        );
-        setMessages(sorted);
+        setMessages(Array.isArray(data) ? data : []);
       }
     } catch {
       // ignore
@@ -68,19 +50,14 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
 
     setSending(true);
     try {
-      const res = await fetch("/api/evolution/send", {
+      const res = await fetch(`/api/conversations/${conversation.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, text: text.trim() }),
+        body: JSON.stringify({ text: text.trim() }),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.lead && onLeadCreated) {
-          onLeadCreated(data.lead);
-        }
         setText("");
-        // Refresh messages after short delay
         setTimeout(fetchMessages, 500);
       }
     } finally {
@@ -95,11 +72,14 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
     }
   }
 
-  const displayName = lead?.name || pushName || phone;
+  const lead = conversation.leads;
+  const channel = conversation.channels;
+  const displayName = lead?.name || lead?.phone || "Desconhecido";
+  const isMetaCloud = channel?.provider === "meta_cloud";
 
-  const leadTags = lead
-    ? tags.filter((t) => lead && (lead as Lead & { tag_ids?: string[] }).tag_ids?.includes(t.id))
-    : [];
+  const leadTagIds = lead
+    ? tags.filter((t) => (lead as Lead & { tag_ids?: string[] }).tag_ids?.includes(t.id))
+    : [] as Tag[];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
@@ -110,11 +90,22 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
         </div>
         <div className="flex-1">
           <h2 className="text-[#1f1f1f] font-medium text-sm">{displayName}</h2>
-          <p className="text-[#9ca3af] text-xs">{phone}</p>
+          <p className="text-[#9ca3af] text-xs">{lead?.phone || ""}</p>
         </div>
-        {leadTags.length > 0 && (
+        {channel && (
+          <span
+            className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+              isMetaCloud
+                ? "bg-[#c8cc8e] text-[#1f1f1f]"
+                : "bg-[#93c5fd] text-[#1e3a5f]"
+            }`}
+          >
+            {channel.name}
+          </span>
+        )}
+        {leadTagIds.length > 0 && (
           <div className="flex gap-1">
-            {leadTags.map((tag) => (
+            {leadTagIds.map((tag) => (
               <span
                 key={tag.id}
                 className="px-2 py-0.5 rounded-full text-xs text-white"
@@ -137,43 +128,32 @@ export function ChatView({ phone, lead, tags, pushName, onLeadCreated }: ChatVie
         {!loading && messages.length === 0 && (
           <p className="text-[#9ca3af] text-sm text-center py-8">Nenhuma mensagem.</p>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.key.id}
-            className={`flex ${msg.key.fromMe ? "justify-end" : "justify-start"}`}
-          >
+        {messages.map((msg) => {
+          const isFromMe = msg.role === "assistant" || msg.sent_by === "agent" || msg.sent_by === "seller";
+          return (
             <div
-              className={`max-w-[70%] px-3 py-2 ${
-                msg.key.fromMe
-                  ? "bg-[#1f1f1f] text-white rounded-2xl rounded-br-sm"
-                  : "bg-white border border-[#e5e5dc] text-[#1f1f1f] rounded-2xl rounded-bl-sm"
-              }`}
+              key={msg.id}
+              className={`flex ${isFromMe ? "justify-end" : "justify-start"}`}
             >
-              {msg.message.imageMessage?.url && (
-                <img
-                  src={msg.message.imageMessage.url}
-                  alt=""
-                  className="max-w-full rounded mb-1"
-                />
-              )}
-              {msg.message.audioMessage?.url && (
-                <audio controls className="max-w-full mb-1">
-                  <source src={msg.message.audioMessage.url} />
-                </audio>
-              )}
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {extractText(msg)}
-              </p>
-              <p
-                className={`text-[11px] mt-1 ${
-                  msg.key.fromMe ? "text-white/50" : "text-[#9ca3af]"
+              <div
+                className={`max-w-[70%] px-3 py-2 ${
+                  isFromMe
+                    ? "bg-[#1f1f1f] text-white rounded-2xl rounded-br-sm"
+                    : "bg-white border border-[#e5e5dc] text-[#1f1f1f] rounded-2xl rounded-bl-sm"
                 }`}
               >
-                {formatTime(msg.messageTimestamp)}
-              </p>
+                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                <p
+                  className={`text-[11px] mt-1 ${
+                    isFromMe ? "text-white/50" : "text-[#9ca3af]"
+                  }`}
+                >
+                  {formatTime(msg.created_at)}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 

@@ -61,6 +61,30 @@ def build_system_prompt(lead: dict) -> str:
     return base + "\n\n" + stage_prompt
 
 
+def _build_profile_prompt(lead: dict, agent_profile: dict, stage: str) -> str:
+    """Build system prompt from an agent_profile record."""
+    now = datetime.now(TZ_BR)
+    base = build_base_prompt(
+        lead_name=lead.get("name"),
+        lead_company=lead.get("company"),
+        now=now,
+    )
+
+    # Use profile's base_prompt if set
+    profile_base = agent_profile.get("base_prompt", "")
+    if profile_base:
+        base = base + "\n\n" + profile_base
+
+    # Use stage-specific prompt from profile, fall back to hardcoded
+    stages = agent_profile.get("stages", {})
+    stage_config = stages.get(stage, {})
+    stage_prompt = stage_config.get("prompt", "")
+    if not stage_prompt:
+        stage_prompt = STAGE_PROMPTS.get(stage, SECRETARIA_PROMPT)
+
+    return base + "\n\n" + stage_prompt
+
+
 def build_messages(lead: dict, user_text: str) -> list[dict]:
     """Build the messages array for OpenAI from conversation history."""
     system_prompt = build_system_prompt(lead)
@@ -77,13 +101,31 @@ def build_messages(lead: dict, user_text: str) -> list[dict]:
     return messages
 
 
-async def run_agent(lead: dict, user_text: str) -> str:
+async def run_agent(lead: dict, user_text: str, channel: dict | None = None) -> str:
     """Run the AI agent for a lead and return the response text."""
     stage = lead.get("stage", "secretaria")
-    model = STAGE_MODELS.get(stage, "gpt-4.1")
-    tools = get_tools_for_stage(stage)
 
-    messages = build_messages(lead, user_text)
+    # If channel has an agent profile, use its configuration
+    agent_profile = channel.get("agent_profiles") if channel else None
+
+    if agent_profile and agent_profile.get("stages"):
+        profile_stages = agent_profile["stages"]
+        stage_config = profile_stages.get(stage, {})
+        model = stage_config.get("model") or agent_profile.get("model", "gpt-4.1")
+        tools = get_tools_for_stage(stage)
+        system_prompt = _build_profile_prompt(lead, agent_profile, stage)
+    else:
+        model = STAGE_MODELS.get(stage, "gpt-4.1")
+        tools = get_tools_for_stage(stage)
+        system_prompt = build_system_prompt(lead)
+
+    # Build messages with the resolved system prompt
+    history = get_history(lead["id"], limit=30)
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in history:
+        if msg["role"] in ("user", "assistant"):
+            messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": user_text})
 
     # Save user message
     save_message(lead["id"], "user", user_text, stage)

@@ -6,12 +6,20 @@ export const AGENT_STAGES = [
   { key: "consumo", label: "Consumo", color: "bg-[#f0ecd0]", dotColor: "#d4b84a", tintColor: "#f4f2ea", avatarColor: "#d4b84a" },
 ] as const;
 
-export const SELLER_STAGES = [
+export const DEAL_STAGES = [
   { key: "novo", label: "Novo", color: "bg-[#f0d8d8]", dotColor: "#e07a7a", tintColor: "#f6eeee", avatarColor: "#e07a7a" },
-  { key: "em_contato", label: "Em Contato", color: "bg-[#f0e4d0]", dotColor: "#d4a04a", tintColor: "#f4f0ea", avatarColor: "#d4a04a" },
+  { key: "contato", label: "Contato", color: "bg-[#f0e4d0]", dotColor: "#d4a04a", tintColor: "#f4f0ea", avatarColor: "#d4a04a" },
+  { key: "proposta", label: "Proposta", color: "bg-[#e8dff0]", dotColor: "#9b7abf", tintColor: "#f0edf4", avatarColor: "#9b7abf" },
   { key: "negociacao", label: "Negociacao", color: "bg-[#dce8f0]", dotColor: "#5b8aad", tintColor: "#eef2f6", avatarColor: "#5b8aad" },
-  { key: "fechado", label: "Fechado", color: "bg-[#d8f0dc]", dotColor: "#5aad65", tintColor: "#edf4ef", avatarColor: "#5aad65" },
-  { key: "perdido", label: "Perdido", color: "bg-[#f4f4f0]", dotColor: "#9ca3af", tintColor: "#f2f2f0", avatarColor: "#9ca3af" },
+  { key: "fechado_ganho", label: "Fechado Ganho", color: "bg-[#d8f0dc]", dotColor: "#5aad65", tintColor: "#edf4ef", avatarColor: "#5aad65" },
+  { key: "fechado_perdido", label: "Perdido", color: "bg-[#f4f4f0]", dotColor: "#9ca3af", tintColor: "#f2f2f0", avatarColor: "#9ca3af" },
+] as const;
+
+export const DEAL_CATEGORIES = [
+  { key: "atacado", label: "Atacado", color: "#5b8aad" },
+  { key: "private_label", label: "Private Label", color: "#9b7abf" },
+  { key: "exportacao", label: "Exportacao", color: "#5aad65" },
+  { key: "consumo", label: "Consumo", color: "#d4b84a" },
 ] as const;
 
 export const CONVERSATION_TABS = [

@@ -8,7 +8,6 @@ export interface Lead {
   campaign_id: string | null;
   last_msg_at: string | null;
   created_at: string;
-  seller_stage: string;
   assigned_to: string | null;
   human_control: boolean;
   channel: string;
@@ -21,12 +20,33 @@ export interface Lead {
   email: string | null;
   instagram: string | null;
   inscricao_estadual: string | null;
-  // Sale
-  sale_value: number;
   // Metrics
   entered_stage_at: string | null;
   first_response_at: string | null;
   on_hold: boolean;
+}
+
+export interface Deal {
+  id: string;
+  lead_id: string;
+  title: string;
+  value: number;
+  stage: string;
+  category: string | null;
+  expected_close_date: string | null;
+  assigned_to: string | null;
+  closed_at: string | null;
+  lost_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  leads?: {
+    id: string;
+    name: string | null;
+    company: string | null;
+    phone: string;
+    nome_fantasia: string | null;
+  };
 }
 
 export interface Message {

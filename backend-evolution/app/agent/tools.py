@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.leads.service import update_lead, save_message
+from app.leads.service import update_lead, save_message, create_deal
 from app.whatsapp.client import send_text, send_image_base64
 
 logger = logging.getLogger(__name__)
@@ -165,8 +165,8 @@ async def execute_tool(
         return f"Stage alterado para: {new_stage}"
 
     elif tool_name == "encaminhar_humano":
-        # TODO: implement actual human handoff (e.g., notify via WhatsApp group or webhook)
-        update_lead(lead_id, status="converted", human_control=True, seller_stage="novo")
+        update_lead(lead_id, status="converted", human_control=True)
+        create_deal(lead_id, title=f"{args.get('vendedor', 'Vendedor')} - {args['motivo']}")
         save_message(lead_id, "system", f"Lead encaminhado para {args['vendedor']}: {args['motivo']}")
         return f"Lead encaminhado para {args['vendedor']}"
 

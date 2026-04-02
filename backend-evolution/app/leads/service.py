@@ -41,7 +41,7 @@ def reset_lead(lead_id: str) -> None:
     }).eq("id", lead_id).execute()
 
 
-def save_message(lead_id: str, role: str, content: str, stage: str | None = None, sent_by: str = "agent") -> dict[str, Any]:
+def save_message(lead_id: str, role: str, content: str, stage: str | None = None, sent_by: str = "agent", conversation_id: str | None = None) -> dict[str, Any]:
     sb = get_supabase()
     msg = {
         "lead_id": lead_id,
@@ -50,7 +50,21 @@ def save_message(lead_id: str, role: str, content: str, stage: str | None = None
         "stage": stage,
         "sent_by": sent_by,
     }
+    if conversation_id:
+        msg["conversation_id"] = conversation_id
     result = sb.table("messages").insert(msg).execute()
+    return result.data[0]
+
+
+def create_deal(lead_id: str, title: str, category: str | None = None) -> dict[str, Any]:
+    sb = get_supabase()
+    deal = {
+        "lead_id": lead_id,
+        "title": title,
+        "stage": "novo",
+        "category": category,
+    }
+    result = sb.table("deals").insert(deal).execute()
     return result.data[0]
 
 

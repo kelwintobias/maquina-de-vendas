@@ -2,41 +2,38 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Campaign } from "@/lib/types";
+import type { Cadence } from "@/lib/types";
 
-export function useRealtimeCampaigns() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+export function useRealtimeCadences() {
+  const [cadences, setCadences] = useState<Cadence[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  const fetchCampaigns = useCallback(async () => {
+  const fetchCadences = useCallback(async () => {
     const { data } = await supabase
-      .from("campaigns")
+      .from("cadences")
       .select("*")
       .order("created_at", { ascending: false });
-
-    if (data) setCampaigns(data);
+    if (data) setCadences(data);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchCampaigns();
+    fetchCadences();
 
     const channel = supabase
-      .channel("campaigns-changes")
+      .channel("cadences-changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "campaigns" },
-        () => {
-          fetchCampaigns();
-        }
+        { event: "*", schema: "public", table: "cadences" },
+        () => fetchCadences()
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchCampaigns]);
+  }, [fetchCadences]);
 
-  return { campaigns, loading };
+  return { cadences, loading };
 }

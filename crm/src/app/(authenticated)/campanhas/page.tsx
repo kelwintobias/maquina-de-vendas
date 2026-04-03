@@ -19,14 +19,24 @@ export default function CampanhasPage() {
   const handleCreateCadence = async () => {
     if (!cadenceName.trim()) return;
     setCreatingSaving(true);
-    await fetch("/api/cadences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: cadenceName.trim() }),
-    });
-    setCadenceName("");
-    setShowCadenceModal(false);
-    setCreatingSaving(false);
+    try {
+      const res = await fetch("/api/cadences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cadenceName.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Erro ao criar cadencia: ${err.error || res.statusText}`);
+        return;
+      }
+      setCadenceName("");
+      setShowCadenceModal(false);
+    } catch (e) {
+      alert(`Erro de rede: ${e}`);
+    } finally {
+      setCreatingSaving(false);
+    }
   };
 
   if (bLoading || cLoading) {

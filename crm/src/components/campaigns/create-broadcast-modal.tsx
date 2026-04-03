@@ -28,7 +28,7 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
   const [intervalMax, setIntervalMax] = useState(8);
 
   // Leads
-  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [leadTab, setLeadTab] = useState<"crm" | "csv">("crm");
 
@@ -72,11 +72,11 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
       });
       const broadcast = await res.json();
 
-      if (leadTab === "crm" && selectedLeadIds.length) {
+      if (leadTab === "crm" && selectedLeadIds.size) {
         await fetch(`/api/broadcasts/${broadcast.id}/leads`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lead_ids: selectedLeadIds }),
+          body: JSON.stringify({ lead_ids: [...selectedLeadIds] }),
         });
       } else if (leadTab === "csv" && csvFile) {
         const formData = new FormData();
@@ -104,7 +104,7 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
     setTemplateVars({});
     setPresetId("");
     setCadenceId("");
-    setSelectedLeadIds([]);
+    setSelectedLeadIds(new Set());
     setCsvFile(null);
   };
 
@@ -175,7 +175,7 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
               </div>
 
               {leadTab === "crm" ? (
-                <LeadSelector selectedIds={selectedLeadIds} onChange={setSelectedLeadIds} />
+                <LeadSelector selectedIds={selectedLeadIds} onSelectionChange={setSelectedLeadIds} />
               ) : (
                 <div className="border-2 border-dashed border-[#e5e5dc] rounded-xl p-8 text-center">
                   <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0] || null)} className="text-[13px]" />
@@ -183,7 +183,7 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
                 </div>
               )}
               <p className="text-[12px] text-[#5f6368]">
-                {leadTab === "crm" ? `${selectedLeadIds.length} leads selecionados` : csvFile ? "CSV pronto para envio" : "Nenhum arquivo selecionado"}
+                {leadTab === "crm" ? `${selectedLeadIds.size} leads selecionados` : csvFile ? "CSV pronto para envio" : "Nenhum arquivo selecionado"}
               </p>
             </>
           )}
@@ -194,7 +194,7 @@ export function CreateBroadcastModal({ open, onClose, onCreated }: CreateBroadca
               <div className="bg-[#f6f7ed] rounded-xl p-4 space-y-2 text-[13px]">
                 <p><span className="text-[#5f6368]">Nome:</span> <strong>{name}</strong></p>
                 <p><span className="text-[#5f6368]">Template:</span> <strong>{templateName}</strong></p>
-                <p><span className="text-[#5f6368]">Leads:</span> <strong>{leadTab === "crm" ? selectedLeadIds.length : "CSV"}</strong></p>
+                <p><span className="text-[#5f6368]">Leads:</span> <strong>{leadTab === "crm" ? selectedLeadIds.size : "CSV"}</strong></p>
                 <p><span className="text-[#5f6368]">Intervalo:</span> <strong>{intervalMin}-{intervalMax}s</strong></p>
                 {cadenceId && <p><span className="text-[#5f6368]">Cadencia:</span> <strong>{cadences.find((c) => c.id === cadenceId)?.name}</strong></p>}
               </div>

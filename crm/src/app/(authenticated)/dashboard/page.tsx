@@ -1,12 +1,10 @@
 "use client";
 
 import { useRealtimeLeads } from "@/hooks/use-realtime-leads";
-import { useRealtimeCampaigns } from "@/hooks/use-realtime-campaigns";
 import { useRealtimeDeals } from "@/hooks/use-realtime-deals";
 import { DEAL_STAGES } from "@/lib/constants";
 import { KpiCard } from "@/components/kpi-card";
 import { FunnelChart } from "@/components/funnel-chart";
-import { CampaignMetricsTable } from "@/components/campaign-table";
 import { LeadSourcesChart } from "@/components/dashboard/lead-sources-chart";
 import { FunnelMovement } from "@/components/dashboard/funnel-movement";
 
@@ -48,10 +46,9 @@ const ClockIcon = (
 
 export default function DashboardPage() {
   const { leads, loading: leadsLoading } = useRealtimeLeads();
-  const { campaigns, loading: campaignsLoading } = useRealtimeCampaigns();
   const { deals, loading: dealsLoading } = useRealtimeDeals();
 
-  if (leadsLoading || campaignsLoading || dealsLoading) {
+  if (leadsLoading || dealsLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -137,7 +134,6 @@ export default function DashboardPage() {
         <FunnelMovement deals={deals} />
       </div>
 
-      <CampaignMetricsTable campaigns={campaigns} />
     </div>
   );
 }

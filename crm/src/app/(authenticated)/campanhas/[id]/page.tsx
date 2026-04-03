@@ -1,172 +1,152 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
-import { useRealtimeCampaigns } from "@/hooks/use-realtime-campaigns";
-import { CAMPAIGN_STATUS_COLORS } from "@/lib/constants";
-import { CampaignKpis } from "@/components/campaign-kpis";
-import { CadenceLeadsTable } from "@/components/cadence-leads-table";
-import { CadenceStepsModal } from "@/components/cadence-steps-modal";
-import { CadenceActivity } from "@/components/cadence-activity";
+import type { Cadence } from "@/lib/types";
+import { CadenceStepsTable } from "@/components/campaigns/cadence-steps-table";
+import { CadenceTriggerConfig } from "@/components/campaigns/cadence-trigger-config";
+import { CadenceEnrollmentsTable } from "@/components/campaigns/cadence-enrollments-table";
 
-const FASTAPI_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
+export default function CadenceDetailPage() {
+  const params = useParams();
+  const cadenceId = params.id as string;
+  const [cadence, setCadence] = useState<Cadence | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"steps" | "leads" | "config">("steps");
 
-type Tab = "leads" | "steps" | "atividade";
+  useEffect(() => {
+    fetch(`/api/cadences/${cadenceId}`)
+      .then((r) => r.json())
+      .then((d) => { setCadence(d); setLoading(false); });
+  }, [cadenceId]);
 
-export default function CampaignDetailPage() {
-  const params = useParams<{ id: string }>();
-  const { campaigns, loading } = useRealtimeCampaigns();
-  const [tab, setTab] = useState<Tab>("leads");
-  const [showModal, setShowModal] = useState(false);
-
-  const campaign = campaigns.find((c) => c.id === params.id);
-
-  async function handleAction(action: "start" | "pause") {
-    if (!campaign) return;
-    await fetch(`${FASTAPI_URL}/api/campaigns/${campaign.id}/${action}`, {
-      method: "POST",
+  const handleConfigChange = async (field: string, value: string | number | null) => {
+    if (!cadence) return;
+    const updated = { ...cadence, [field]: value };
+    setCadence(updated as Cadence);
+    await fetch(`/api/cadences/${cadenceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
     });
-  }
+  };
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-3 py-12">
-        <div className="w-5 h-5 border-2 border-[#c8cc8e] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#5f6368] text-[14px]">Carregando...</p>
-      </div>
-    );
-  }
+  const handleToggleStatus = async () => {
+    if (!cadence) return;
+    const newStatus = cadence.status === "active" ? "paused" : "active";
+    setCadence({ ...cadence, status: newStatus });
+    await fetch(`/api/cadences/${cadenceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+  };
 
-  if (!campaign) {
-    return (
-      <div className="py-12 text-center">
-        <p className="text-[14px] text-[#5f6368] mb-4">Campanha nao encontrada.</p>
-        <Link href="/campanhas" className="text-[13px] font-medium text-[#1f1f1f] hover:underline">
-          &larr; Voltar para campanhas
-        </Link>
-      </div>
-    );
+  if (loading || !cadence) {
+    return <div className="h-8 w-48 rounded-lg animate-pulse" style={{ backgroundColor: "#e5e5dc" }} />;
   }
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "leads", label: "Leads em Cadencia" },
-    { key: "steps", label: "Steps de Cadencia" },
-    { key: "atividade", label: "Atividade" },
-  ];
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <Link href="/campanhas" className="text-[13px] text-[#5f6368] hover:text-[#1f1f1f] transition-colors mb-3 inline-block">
-          &larr; Campanhas
-        </Link>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[28px] font-bold text-[#1f1f1f]">{campaign.name}</h1>
-            <span
-              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
-                CAMPAIGN_STATUS_COLORS[campaign.status] || ""
-              }`}
-            >
-              {campaign.status}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn-secondary px-4 py-2 rounded-xl text-[13px] font-medium"
-            >
-              Configurar Cadencia
-            </button>
-            {(campaign.status === "draft" || campaign.status === "paused") && (
-              <button
-                onClick={() => handleAction("start")}
-                className="btn-primary px-4 py-2 rounded-xl text-[13px] font-medium"
-              >
-                Iniciar
-              </button>
-            )}
-            {campaign.status === "running" && (
-              <button
-                onClick={() => handleAction("pause")}
-                className="btn-secondary px-4 py-2 rounded-xl text-[13px] font-medium"
-              >
-                Pausar
-              </button>
-            )}
-          </div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-[24px] font-bold text-[#1f1f1f]">{cadence.name}</h1>
+          {cadence.description && <p className="text-[14px] text-[#5f6368] mt-1">{cadence.description}</p>}
         </div>
-        <div className="flex items-center gap-4 mt-2 text-[12px] text-[#5f6368]">
-          <span>Template: <strong className="text-[#1f1f1f]">{campaign.template_name}</strong></span>
-          <span>Criada em: {new Date(campaign.created_at).toLocaleDateString("pt-BR")}</span>
-          <span>Total: <strong className="text-[#1f1f1f]">{campaign.total_leads}</strong> leads</span>
+        <div className="flex items-center gap-3">
+          <span className={`px-2.5 py-1 rounded-full text-[12px] font-medium ${
+            cadence.status === "active" ? "bg-[#d8f0dc] text-[#2d6a3f]" :
+            cadence.status === "paused" ? "bg-[#f0ecd0] text-[#8a7a2a]" :
+            "bg-[#f4f4f0] text-[#5f6368]"
+          }`}>
+            {cadence.status === "active" ? "Ativa" : cadence.status === "paused" ? "Pausada" : "Arquivada"}
+          </span>
+          <button
+            onClick={handleToggleStatus}
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#1f1f1f] text-white hover:bg-[#333]"
+          >
+            {cadence.status === "active" ? "Pausar" : "Ativar"}
+          </button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="mb-6">
-        <CampaignKpis campaign={campaign} />
-      </div>
-
-      {/* Config Summary Bar */}
-      <div className="card p-4 mb-6">
-        <div className="flex items-center gap-6 text-[12px] text-[#5f6368]">
-          <span>Intervalo: <strong className="text-[#1f1f1f]">{campaign.cadence_interval_hours || 24}h</strong></span>
-          <span>Janela: <strong className="text-[#1f1f1f]">{campaign.cadence_send_start_hour || 7}h&ndash;{campaign.cadence_send_end_hour || 18}h</strong></span>
-          <span>Cooldown: <strong className="text-[#1f1f1f]">{campaign.cadence_cooldown_hours || 48}h</strong></span>
-          <span>Max msgs: <strong className="text-[#1f1f1f]">{campaign.cadence_max_messages || 8}</strong></span>
-          <span>Follow-ups enviados: <strong className="text-[#1f1f1f]">{campaign.cadence_sent || 0}</strong></span>
-        </div>
+      {/* Config summary bar */}
+      <div className="flex gap-4 mb-6 text-[12px]">
+        <span className="px-3 py-1.5 rounded-full bg-[#f6f7ed] text-[#5f6368]">
+          Janela: {cadence.send_start_hour}h-{cadence.send_end_hour}h
+        </span>
+        <span className="px-3 py-1.5 rounded-full bg-[#f6f7ed] text-[#5f6368]">
+          Cooldown: {cadence.cooldown_hours}h
+        </span>
+        <span className="px-3 py-1.5 rounded-full bg-[#f6f7ed] text-[#5f6368]">
+          Max: {cadence.max_messages} msgs
+        </span>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 mb-6 border-b border-[#ededea]">
-        {tabs.map((t) => (
+      <div className="flex gap-1 mb-5">
+        {(["steps", "leads", "config"] as const).map((t) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-[13px] font-medium transition-colors relative ${
-              tab === t.key
-                ? "text-[#1f1f1f]"
-                : "text-[#9ca3af] hover:text-[#5f6368]"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+              tab === t ? "bg-[#1f1f1f] text-white" : "text-[#5f6368] hover:bg-[#f6f7ed]"
             }`}
           >
-            {t.label}
-            {tab === t.key && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1f1f1f] rounded-full" />
-            )}
+            {t === "steps" ? "Steps" : t === "leads" ? "Leads" : "Configuracao"}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      {tab === "leads" && <CadenceLeadsTable campaignId={campaign.id} />}
-      {tab === "steps" && (
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[14px] font-semibold text-[#1f1f1f]">Steps de Cadencia por Stage</h3>
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn-secondary px-4 py-1.5 rounded-lg text-[12px] font-medium"
-            >
-              Editar Steps
-            </button>
+      {tab === "steps" && <CadenceStepsTable cadenceId={cadenceId} />}
+      {tab === "leads" && <CadenceEnrollmentsTable cadenceId={cadenceId} />}
+      {tab === "config" && (
+        <div className="card p-5 space-y-5">
+          <CadenceTriggerConfig
+            targetType={cadence.target_type}
+            targetStage={cadence.target_stage}
+            stagnationDays={cadence.stagnation_days}
+            onChange={handleConfigChange}
+          />
+
+          <div className="border-t border-[#e5e5dc] pt-5 space-y-4">
+            <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#9ca3af]">Configuracoes de envio</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[12px] text-[#5f6368] block mb-1">Janela inicio (hora)</label>
+                <input type="number" value={cadence.send_start_hour} onChange={(e) => handleConfigChange("send_start_hour", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px]" />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#5f6368] block mb-1">Janela fim (hora)</label>
+                <input type="number" value={cadence.send_end_hour} onChange={(e) => handleConfigChange("send_end_hour", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px]" />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#5f6368] block mb-1">Cooldown apos resposta (horas)</label>
+                <input type="number" value={cadence.cooldown_hours} onChange={(e) => handleConfigChange("cooldown_hours", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px]" />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#5f6368] block mb-1">Max mensagens por lead</label>
+                <input type="number" value={cadence.max_messages} onChange={(e) => handleConfigChange("max_messages", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px]" />
+              </div>
+            </div>
           </div>
-          <p className="text-[13px] text-[#5f6368]">
-            Clique em &ldquo;Editar Steps&rdquo; ou &ldquo;Configurar Cadencia&rdquo; para gerenciar as mensagens de follow-up.
-          </p>
+
+          <div className="border-t border-[#e5e5dc] pt-5">
+            <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[#9ca3af] mb-3">Nome e descricao</h3>
+            <input
+              value={cadence.name}
+              onChange={(e) => handleConfigChange("name", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px] mb-3"
+            />
+            <textarea
+              value={cadence.description || ""}
+              onChange={(e) => handleConfigChange("description", e.target.value || null)}
+              placeholder="Descricao da cadencia..."
+              className="w-full px-3 py-2 rounded-lg border border-[#e5e5dc] text-[13px] min-h-[60px]"
+            />
+          </div>
         </div>
       )}
-      {tab === "atividade" && <CadenceActivity campaignId={campaign.id} />}
-
-      {/* Modal */}
-      <CadenceStepsModal
-        campaign={campaign}
-        open={showModal}
-        onClose={() => setShowModal(false)}
-      />
     </div>
   );
 }

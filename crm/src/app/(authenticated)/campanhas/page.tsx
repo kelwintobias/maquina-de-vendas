@@ -1,53 +1,77 @@
 "use client";
 
 import { useState } from "react";
-import { useRealtimeCampaigns } from "@/hooks/use-realtime-campaigns";
-import { CampaignCard } from "@/components/campaign-card";
-import { CreateCampaignModal } from "@/components/create-campaign-modal";
+import { useRealtimeBroadcasts } from "@/hooks/use-realtime-broadcasts";
+import { useRealtimeCadences } from "@/hooks/use-realtime-cadences";
+import { CampaignsDashboard } from "@/components/campaigns/campaigns-dashboard";
+import { CampaignsTabs } from "@/components/campaigns/campaigns-tabs";
+import { CreateBroadcastModal } from "@/components/campaigns/create-broadcast-modal";
 
 export default function CampanhasPage() {
-  const { campaigns, loading } = useRealtimeCampaigns();
-  const [showModal, setShowModal] = useState(false);
+  const { broadcasts, loading: bLoading } = useRealtimeBroadcasts();
+  const { cadences, loading: cLoading } = useRealtimeCadences();
+  const [period, setPeriod] = useState("30d");
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [showCadenceModal, setShowCadenceModal] = useState(false);
 
-  if (loading) {
+  const handleCreateCadence = async () => {
+    const name = prompt("Nome da cadencia:");
+    if (!name) return;
+    await fetch("/api/cadences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setShowCadenceModal(false);
+  };
+
+  if (bLoading || cLoading) {
     return (
-      <div className="flex items-center gap-3 py-12">
-        <div className="w-5 h-5 border-2 border-[#c8cc8e] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#5f6368] text-[14px]">Carregando...</p>
+      <div className="space-y-6">
+        <div className="h-8 w-48 rounded-lg animate-pulse" style={{ backgroundColor: "#e5e5dc" }} />
+        <div className="grid grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="card p-4 h-20 animate-pulse" style={{ backgroundColor: "rgba(229,229,220,0.3)" }} />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[28px] font-bold text-[#1f1f1f]">Campanhas</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-medium"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="8" y1="3" x2="8" y2="13" />
-            <line x1="3" y1="8" x2="13" y2="8" />
-          </svg>
-          Nova Campanha
-        </button>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-[28px] font-bold leading-tight" style={{ color: "var(--text-primary)" }}>
+            Campanhas
+          </h1>
+          <p className="text-[14px] mt-1" style={{ color: "var(--text-muted)" }}>
+            Disparos em massa e cadencias de follow-up
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowBroadcastModal(true)}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#1f1f1f] text-white hover:bg-[#333] transition-colors"
+          >
+            + Disparo
+          </button>
+          <button
+            onClick={handleCreateCadence}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#f6f7ed] text-[#1f1f1f] border border-[#e5e5dc] hover:bg-[#eef0e0] transition-colors"
+          >
+            + Cadencia
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {campaigns.map((c) => (
-          <CampaignCard key={c.id} campaign={c} />
-        ))}
-        {campaigns.length === 0 && (
-          <div className="card p-12 text-center">
-            <p className="text-[14px] text-[#5f6368]">Nenhuma campanha criada ainda.</p>
-          </div>
-        )}
-      </div>
+      <CampaignsDashboard period={period} onPeriodChange={setPeriod} />
+      <CampaignsTabs broadcasts={broadcasts} cadences={cadences} onRefreshBroadcasts={() => {}} />
 
-      <CreateCampaignModal
-        open={showModal}
-        onClose={() => setShowModal(false)}
+      <CreateBroadcastModal
+        open={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        onCreated={() => {}}
       />
     </div>
   );

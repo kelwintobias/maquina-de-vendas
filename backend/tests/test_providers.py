@@ -75,3 +75,35 @@ async def test_mark_read_usa_bearer_token():
 
     request = respx.calls[0].request
     assert request.headers["Authorization"] == "Bearer EAABs_test_token"
+
+
+from app.providers.evolution import EvolutionProvider, HTTPX_TIMEOUT as EVOLUTION_TIMEOUT
+
+
+def _make_evolution_provider():
+    return EvolutionProvider({
+        "api_url": "https://evolution.example.com",
+        "api_key": "test-api-key",
+        "instance": "my-instance",
+    })
+
+
+def test_evolution_httpx_timeout_constante_definida():
+    assert EVOLUTION_TIMEOUT is not None
+    assert isinstance(EVOLUTION_TIMEOUT, httpx.Timeout)
+    assert EVOLUTION_TIMEOUT.connect <= 10.0
+    assert EVOLUTION_TIMEOUT.read is not None
+    assert EVOLUTION_TIMEOUT.read <= 60.0
+
+
+@respx.mock
+async def test_evolution_send_text_usa_apikey_header():
+    provider = _make_evolution_provider()
+    respx.post(
+        "https://evolution.example.com/message/sendText/my-instance"
+    ).mock(return_value=httpx.Response(200, json={"status": "PENDING"}))
+
+    await provider.send_text("5511999999999", "Olá!")
+
+    request = respx.calls[0].request
+    assert request.headers["apikey"] == "test-api-key"

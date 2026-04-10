@@ -26,6 +26,24 @@ export default function ConversasPage() {
     fetchConversations();
   }, [selectedChannelId]);
 
+  // Realtime: re-sort list when any conversation's last_msg_at changes
+  useEffect(() => {
+    const realtimeChannel = supabase
+      .channel("conversations-updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversations" },
+        () => {
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(realtimeChannel);
+    };
+  }, [selectedChannelId]);
+
   async function loadData() {
     setLoading(true);
     await Promise.all([fetchConversations(), fetchChannels(), fetchTags(), fetchLeadTags()]);

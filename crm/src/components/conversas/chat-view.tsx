@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import type { Message, Conversation, Tag, Lead } from "@/lib/types";
+import { useState, useEffect, useRef, useMemo } from "react";
+import type { Message, Conversation, Tag } from "@/lib/types";
+import { useRealtimeMessages } from "@/hooks/use-realtime-messages";
 
 interface ChatViewProps {
   conversation: Conversation;
@@ -14,54 +15,93 @@ function formatTime(ts: string): string {
 }
 
 export function ChatView({ conversation, tags }: ChatViewProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const lead = conversation.leads;
+  const channel = conversation.channels;
+
+  // Real-time messages from Supabase (subscribed by lead_id)
+  const { messages, loading } = useRealtimeMessages(lead?.id ?? null);
+
+  // Optimistic messages: shown immediately on send, removed once real message arrives
+  const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
+
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
+  // Clear optimistic messages when switching conversations
   useEffect(() => {
-    setLoading(true);
-    setMessages([]);
-    fetchMessages();
+    setOptimisticMessages([]);
   }, [conversation.id]);
 
+  // Abort in-flight fetch on conversation switch
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [conversation.id]);
+
+  // Merged display list: real messages + unconfirmed optimistic ones
+  const displayMessages = useMemo(() => {
+    return [...messages, ...optimisticMessages];
+  }, [messages, optimisticMessages]);
+
+  // Auto-scroll to latest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  async function fetchMessages() {
-    try {
-      const res = await fetch(`/api/conversations/${conversation.id}/messages`);
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [displayMessages]);
 
   async function handleSend() {
-    if (!text.trim() || sending) return;
+    if (!text.trim() || sendingRef.current) return;
+    sendingRef.current = true;
 
+    const content = text.trim();
+
+    // Inject optimistic message immediately — user sees it at ~0ms
+    const tempMsg: Message = {
+      id: `temp_${Date.now()}`,
+      lead_id: lead?.id ?? "",
+      role: "assistant",
+      content,
+      stage: null,
+      sent_by: "seller",
+      created_at: new Date().toISOString(),
+    };
+
+    setText("");
+    setOptimisticMessages((prev) => [...prev, tempMsg]);
     setSending(true);
+
     try {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const res = await fetch(`/api/conversations/${conversation.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim() }),
+        body: JSON.stringify({ text: content }),
+        signal: controller.signal,
       });
 
       if (res.ok) {
-        setText("");
-        setTimeout(fetchMessages, 500);
+        // Remove temp after realtime delivers the real message (~3s window)
+        setTimeout(() => {
+          setOptimisticMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
+        }, 3000);
+      } else {
+        // Send failed — remove temp message and restore input
+        setOptimisticMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
+        setText(content);
       }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setOptimisticMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
+      setText(content);
     } finally {
       setSending(false);
+      sendingRef.current = false;
     }
   }
 
@@ -72,14 +112,12 @@ export function ChatView({ conversation, tags }: ChatViewProps) {
     }
   }
 
-  const lead = conversation.leads;
-  const channel = conversation.channels;
   const displayName = lead?.name || lead?.phone || "Desconhecido";
   const isMetaCloud = channel?.provider === "meta_cloud";
 
-  const leadTagIds = lead
-    ? tags.filter((t) => (lead as Lead & { tag_ids?: string[] }).tag_ids?.includes(t.id))
-    : [] as Tag[];
+  const tagIdsRaw = (lead as unknown as Record<string, unknown>)?.tag_ids;
+  const tagIds = Array.isArray(tagIdsRaw) ? (tagIdsRaw as string[]) : [];
+  const leadTagIds = lead ? tags.filter((t) => tagIds.includes(t.id)) : [] as Tag[];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
@@ -125,11 +163,15 @@ export function ChatView({ conversation, tags }: ChatViewProps) {
             <div className="w-6 h-6 border-2 border-[#c8cc8e] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        {!loading && messages.length === 0 && (
+        {!loading && displayMessages.length === 0 && (
           <p className="text-[#9ca3af] text-sm text-center py-8">Nenhuma mensagem.</p>
         )}
-        {messages.map((msg) => {
-          const isFromMe = msg.role === "assistant" || msg.sent_by === "agent" || msg.sent_by === "seller";
+        {displayMessages.map((msg) => {
+          const isFromMe =
+            msg.role === "assistant" ||
+            msg.sent_by === "agent" ||
+            msg.sent_by === "seller";
+          const isTemp = msg.id.startsWith("temp_");
           return (
             <div
               key={msg.id}
@@ -140,7 +182,7 @@ export function ChatView({ conversation, tags }: ChatViewProps) {
                   isFromMe
                     ? "bg-[#1f1f1f] text-white rounded-2xl rounded-br-sm"
                     : "bg-white border border-[#e5e5dc] text-[#1f1f1f] rounded-2xl rounded-bl-sm"
-                }`}
+                } ${isTemp ? "opacity-70" : ""}`}
               >
                 <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                 <p
@@ -148,7 +190,7 @@ export function ChatView({ conversation, tags }: ChatViewProps) {
                     isFromMe ? "text-white/50" : "text-[#9ca3af]"
                   }`}
                 >
-                  {formatTime(msg.created_at)}
+                  {isTemp ? "Enviando..." : formatTime(msg.created_at)}
                 </p>
               </div>
             </div>
@@ -175,7 +217,12 @@ export function ChatView({ conversation, tags }: ChatViewProps) {
             className="bg-[#1f1f1f] text-white p-2.5 rounded-full hover:bg-[#333] disabled:opacity-50 flex-shrink-0 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
             </svg>
           </button>
         </div>

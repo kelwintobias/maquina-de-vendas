@@ -32,11 +32,11 @@ STAGE_PROMPTS = {
 }
 
 STAGE_MODELS = {
-    "secretaria": "gemini-2.5-flash-preview-04-17",
-    "atacado": "gemini-2.5-flash-preview-04-17",
-    "private_label": "gemini-2.5-flash-preview-04-17",
-    "exportacao": "gemini-2.0-flash",
-    "consumo": "gemini-2.0-flash",
+    "secretaria": "gemini-3-flash-preview",
+    "atacado": "gemini-3-flash-preview",
+    "private_label": "gemini-3-flash-preview",
+    "exportacao": "gemini-3-flash-preview",
+    "consumo": "gemini-3-flash-preview",
 }
 
 

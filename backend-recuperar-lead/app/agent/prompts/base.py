@@ -9,10 +9,20 @@ def get_greeting(hour: int) -> str:
     return "boa noite"
 
 
-def build_base_prompt(lead_name: str | None, lead_company: str | None, now: datetime) -> str:
+def build_base_prompt(
+    lead_name: str | None,
+    lead_company: str | None,
+    now: datetime,
+    lead_context: dict | None = None,
+) -> str:
     greeting = get_greeting(now.hour)
     today = now.strftime("%d/%m/%Y")
     weekday = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"][now.weekday()]
+
+    # lead_context overrides individual params when present
+    if lead_context:
+        lead_name = lead_context.get("name") or lead_name
+        lead_company = lead_context.get("company") or lead_company
 
     if lead_name:
         name_instruction = (
@@ -27,6 +37,20 @@ def build_base_prompt(lead_name: str | None, lead_company: str | None, now: date
         )
 
     company_line = f"Empresa do lead: {lead_company}" if lead_company else ""
+
+    # Extra context from CRM (previous stage, notes)
+    extra_lines = []
+    if lead_context:
+        prev_stage = lead_context.get("previous_stage")
+        notes = lead_context.get("notes")
+        if prev_stage:
+            extra_lines.append(f"Interesse anterior identificado: {prev_stage}")
+        if notes:
+            extra_lines.append(f"Notas do CRM: {notes}")
+
+    extra_context = ""
+    if extra_lines:
+        extra_context = "\n\n# CONTEXTO DO LEAD (CRM)\n" + "\n".join(extra_lines)
 
     return f"""# IDENTIDADE
 
@@ -92,7 +116,7 @@ Saudacao sugerida: {greeting}
 # SOBRE O LEAD
 
 {name_instruction}
-{company_line}
+{company_line}{extra_context}
 
 ---
 

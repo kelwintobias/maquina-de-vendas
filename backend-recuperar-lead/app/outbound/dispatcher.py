@@ -71,24 +71,25 @@ async def dispatch_to_lead(phone: str, lead_context: dict) -> dict:
     lead_id = lead["id"]
 
     # Mark lead as template_sent so processor knows to activate on first reply
-    update_lead(lead_id, status="template_sent")
+    try:
+        update_lead(lead_id, status="template_sent")
+    except Exception as e:
+        logger.error(f"[DISPATCH] Failed to update lead status for {lead_id}: {e}", exc_info=True)
 
     # Create/get conversation and mark as template_sent
     channel_id = lead_context.get("channel_id", "")
-    if channel_id:
+    if not channel_id:
+        raise ValueError("channel_id is required in lead_context to create conversation record")
+
+    try:
         conversation = get_or_create_conversation(lead_id, channel_id)
         update_conversation(conversation["id"], status="template_sent")
         save_message(conversation["id"], lead_id, "assistant", TEMPLATE_TEXT, "secretaria")
-    else:
-        # No channel_id: save message without conversation link (minimal mode)
-        from app.db.supabase import get_supabase
-        sb = get_supabase()
-        sb.table("messages").insert({
-            "lead_id": lead_id,
-            "role": "assistant",
-            "content": TEMPLATE_TEXT,
-            "stage": "secretaria",
-        }).execute()
+    except Exception as e:
+        logger.error(
+            f"[DISPATCH] Failed to update conversation state for lead {lead_id}: {e}",
+            exc_info=True,
+        )
 
     logger.info(f"[DISPATCH] Template sent to {phone} (lead_id={lead_id}), wamid={result}")
     return {"status": "sent", "phone": phone, "lead_id": lead_id}

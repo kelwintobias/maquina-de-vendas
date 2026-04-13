@@ -52,6 +52,8 @@ async def test_dispatch_sends_template_saves_message_and_sets_status():
         mock_update_lead.assert_called_once_with("lead-abc", status="template_sent")
         # Conversation status updated to template_sent
         mock_update_conv.assert_called_once_with("conv-xyz", status="template_sent")
+        # Verify get_or_create_conversation was called with correct args
+        mock_get_conv.assert_called_once_with("lead-abc", "channel-1")
 
 
 @pytest.mark.asyncio
@@ -63,4 +65,38 @@ async def test_dispatch_missing_token_raises():
 
         from app.outbound.dispatcher import dispatch_to_lead
         with pytest.raises(ValueError, match="META_ACCESS_TOKEN"):
+            await dispatch_to_lead("+5511999999999", {})
+
+
+@pytest.mark.asyncio
+async def test_dispatch_missing_channel_id_raises():
+    """dispatch_to_lead should raise ValueError when channel_id is not in lead_context."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"messages": [{"id": "wamid.123"}]}
+
+    mock_lead = {
+        "id": "lead-abc",
+        "phone": "+5511999999999",
+        "stage": "secretaria",
+        "status": "imported",
+        "name": None,
+    }
+
+    with patch("app.outbound.dispatcher.settings") as mock_settings, \
+         patch("app.outbound.dispatcher.get_or_create_lead", return_value=mock_lead), \
+         patch("app.outbound.dispatcher.update_lead"), \
+         patch("httpx.AsyncClient") as mock_client_class:
+
+        mock_settings.meta_access_token = "test-token"
+        mock_settings.meta_phone_number_id = "123456"
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        from app.outbound.dispatcher import dispatch_to_lead
+        with pytest.raises(ValueError, match="channel_id is required"):
             await dispatch_to_lead("+5511999999999", {})

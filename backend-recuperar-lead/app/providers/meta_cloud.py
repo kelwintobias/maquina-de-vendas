@@ -2,6 +2,7 @@ import httpx
 
 from app.providers.base import WhatsAppProvider
 
+# Explicit timeouts: 5s connect, 30s read (media downloads can be large)
 HTTPX_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 
 
@@ -77,7 +78,14 @@ class MetaCloudProvider(WhatsAppProvider):
         })
 
     async def download_media(self, media_ref: str) -> tuple[bytes, str]:
+        """Download media from Meta Cloud API.
+
+        Two-step process:
+        1. Resolve media_id → CDN URL (requires Auth header, Graph API)
+        2. Download from CDN URL (pre-signed — must NOT send Auth header)
+        """
         async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+            # Step 1: Get CDN URL from Graph API (needs Auth)
             resp = await client.get(
                 f"{self._media_base_url()}/{media_ref}",
                 headers=self._headers(),
@@ -85,6 +93,7 @@ class MetaCloudProvider(WhatsAppProvider):
             resp.raise_for_status()
             media_url = resp.json()["url"]
 
+            # Step 2: Download from CDN (pre-signed URL — no Auth header)
             resp = await client.get(media_url)
             resp.raise_for_status()
             return resp.content, resp.headers.get(

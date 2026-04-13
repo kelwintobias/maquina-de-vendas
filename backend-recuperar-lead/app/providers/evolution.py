@@ -2,6 +2,7 @@ import httpx
 
 from app.providers.base import WhatsAppProvider
 
+# Explicit timeouts: 5s connect, 30s read (media downloads can be large)
 HTTPX_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 
 
@@ -37,7 +38,8 @@ class EvolutionProvider(WhatsAppProvider):
                             language: str = "pt_BR",
                             components: list | None = None) -> dict:
         raise NotImplementedError(
-            "Evolution API does not support Meta-style templates."
+            "Evolution API does not support Meta-style templates. "
+            "Campaigns require a Meta Cloud API channel."
         )
 
     async def send_image(self, to: str, image_url: str,
@@ -62,6 +64,7 @@ class EvolutionProvider(WhatsAppProvider):
         })
 
     async def download_media(self, media_ref: str) -> tuple[bytes, str]:
+        """Download media from URL. media_ref is the direct URL for Evolution."""
         async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
             resp = await client.get(media_ref)
             resp.raise_for_status()

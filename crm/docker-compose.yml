@@ -4,6 +4,15 @@ services:
     networks:
       - canastrainteligencia
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=canastrainteligencia"
@@ -20,8 +29,8 @@ services:
         - "traefik.http.routers.frontend-www.entrypoints=websecure"
         - "traefik.http.routers.frontend-www.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.frontend-www.middlewares=redirect-www"
-        - "traefik.http.middlewares.redirect-www.redirectregex.regex=^https://www\\.(.*)"
-        - "traefik.http.middlewares.redirect-www.redirectregex.replacement=https://$${1}"
+        - "traefik.http.middlewares.redirect-www.redirectregex.regex=^https://www\\.canastrainteligencia\\.com(.*)"
+        - "traefik.http.middlewares.redirect-www.redirectregex.replacement=https://canastrainteligencia.com$${1}"
         - "traefik.http.middlewares.redirect-www.redirectregex.permanent=true"
 
 networks:

@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     evolution_api_key: str = ""
     evolution_instance: str = ""
 
-    # OpenAI
-    openai_api_key: str
+    # Gemini (via OpenAI-compatible API)
+    gemini_api_key: str
 
     # Supabase
     supabase_url: str
@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     meta_access_token: str = ""
     meta_phone_number_id: str = ""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 _settings: Settings | None = None

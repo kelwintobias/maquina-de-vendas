@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     buffer_extend_timeout: int = 10
     buffer_max_timeout: int = 45
 
+    # Meta Cloud API — used by outbound dispatcher
+    meta_access_token: str = ""
+    meta_phone_number_id: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

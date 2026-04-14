@@ -11,8 +11,6 @@ jobs:
   deploy-crm:
     name: Deploy CRM (Next.js)
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.message, 'skip-crm') == false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,21 +37,16 @@ jobs:
             set -e
             cd ~/Maquinadevendascanastra
             git pull origin master
-
             source crm/.env.build
-
             sg docker -c "docker build \
               --build-arg NEXT_PUBLIC_FASTAPI_URL=$NEXT_PUBLIC_FASTAPI_URL \
               --build-arg NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
               --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
               -t canastra-crm:latest ./crm"
-
             sg docker -c "docker stack deploy -c crm/docker-compose.yml crm"
-
             sg docker -c "docker service update \
               --env-add SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY \
               crm_crm"
-
             echo "CRM deployed successfully"
 
   deploy-backend:
@@ -85,8 +78,6 @@ jobs:
             set -e
             cd ~/Maquinadevendascanastra
             git pull origin master
-
             sg docker -c "docker build -t canastra-api:latest ./backend"
             sg docker -c "docker stack deploy -c backend/docker-compose.yml canastra"
-
             echo "Backend deployed successfully"

@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
     role: "assistant",
     content: text,
     stage: lead.stage,
-    sent_by: "seller",
   });
 
   // Update last_msg_at

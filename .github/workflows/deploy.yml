@@ -40,10 +40,7 @@ jobs:
               --build-arg NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
               --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
               -t canastra-crm:latest ./crm"
-            sg docker -c "docker stack deploy -c crm/docker-compose.yml crm"
-            sg docker -c "docker service update \
-              --env-add SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY \
-              crm_crm"
+            sg docker -c "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY docker stack deploy -c crm/docker-compose.yml crm"
             echo "CRM deployed successfully"
 
   deploy-backend:

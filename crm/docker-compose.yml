@@ -1,6 +1,8 @@
 services:
   crm:
     image: canastra-crm:latest
+    environment:
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     networks:
       - canastrainteligencia
     deploy:

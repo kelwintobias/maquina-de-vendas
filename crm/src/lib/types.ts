@@ -54,7 +54,7 @@ export interface Message {
   role: string;       // "user" | "assistant" | "system"
   content: string;
   stage: string | null;
-  sent_by: string;    // "agent" | "seller"
+  sent_by?: string | null;    // "agent" | "seller" — not stored in DB, kept for display logic
   created_at: string;
 }
 

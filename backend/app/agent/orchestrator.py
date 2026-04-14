@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from app.agent.tools import get_tools_for_stage, execute_tool
-from app.conversations.service import get_history, save_message
+from app.conversations.service import get_history
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +86,6 @@ async def run_agent(conversation: dict, agent_profile: dict, user_text: str) -> 
 
     messages = build_messages(conversation, agent_profile, user_text)
 
-    # Save user message
-    save_message(conversation_id, lead_id, "user", user_text, stage)
-
     # Call OpenAI
     response = await _get_openai().chat.completions.create(
         model=model,
@@ -128,9 +125,6 @@ async def run_agent(conversation: dict, agent_profile: dict, user_text: str) -> 
         message = response.choices[0].message
 
     assistant_text = message.content or ""
-
-    # Save assistant message
-    save_message(conversation_id, lead_id, "assistant", assistant_text, stage)
 
     logger.info(f"Agent response for conversation {conversation_id} (stage={stage}): {assistant_text[:100]}...")
     return assistant_text
